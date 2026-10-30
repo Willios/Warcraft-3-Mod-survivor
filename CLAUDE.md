@@ -97,6 +97,17 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   each zone ~30 s. Browser builds now read archives in 256 KB chunks with a 16 MB cache per archive
   (`MpqReadChunk` in `common/mpq.c`, `__EMSCRIPTEN__` only): menu 3.2 s, zone 2.9 s (server side).
 - Saves are local to the browser (OPFS), not online: another browser or device starts fresh.
+- **Fixed 2026-10-30, web sound:** no music (the engine module was built without `-DBZ_MUSIC_MP3`, now in
+  `build-engine.py`), and crackling: the audio producer thread (`S_WebAudioProduce` in `sound/s_sound.c`)
+  slept 2 ms after each 512-frame chunk, a 15.6 ms timer tick on Windows, so a quarter of the worklet's
+  blocks played silence. It now fills to its target and sleeps only when full. To measure: count
+  `available < needed` blocks in the built `audio-worklet.js` and post them through `node.port`
+  (headless Chrome runs the context at 48 kHz with a key press to unlock it).
+- Web fullscreen belongs to the page's button: `R_VideoFullscreen`/`R_VideoBorderless` are false under
+  `__EMSCRIPTEN__` (config.cfg's `vid_fullscreen 1` made SDL fullscreen the page on the first click).
+  `survivor.js` sets `survivor_web 1`; the script's `Engine.web()` hides Quit Game (a page cannot close).
+- Saves (`openrealm/user` in OPFS) survive new uploads: the installer only deletes inside
+  `openrealm/game-data/wc3`. They are lost if the player clears site data or the origin changes.
 - Emscripten's port downloads (SDL2, zlib) fail with Python's SSL store on this machine;
   `build-survivor.sh` sets `SSL_CERT_FILE` from `certifi`.
 
@@ -219,6 +230,10 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 - Lobby title: `src/art/title.tga` (1024x128, WC3-logo style from the game's Friz Quadrata), made by
   `python tools/make_title.py <FRIZQT__.TTF> src/art/title.tga [preview.png]`; extract the font with
   `mpqtool cat 'Fonts\FRIZQT__.TTF'` and undo the `\r\n` translation. Engine only; Reforged shows gold text.
+- 2026-10-30: Siphon Life talent (1 to 5 percent lifesteal, `s.lifesteal`, every damage source), hover tooltips on
+  talent rows (`UI.tooltip`, shared with the HUD's spell/blessing tips), in-run Inventory panel (top right, 2x3,
+  hover shows the item: `Hud.refreshGear`/`Hud.gearTip`), and the Wisp Companion perk (Rewards, 3 ranks): a wisp
+  effect (`G.updateCompanion`) fetches gems and coins outside the pickup range. The smoke test checks the wisp.
 - Difficulty: Normal / Heroic / Mythic / Mythic+ (no cap, no affixes since 2026-10-29), opened per zone
   by winning the one before. The lobby button opens a window listing all four (`Lobby.buildDifficulty`);
   `+set survivor_menu difficulty` opens it for screenshots. Zone `power` climbs 0.7 (Ashenvale) to 3.3

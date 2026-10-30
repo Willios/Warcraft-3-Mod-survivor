@@ -137,6 +137,7 @@ do
         acidBomb = 'Abilities\\Spells\\Other\\AcidBomb\\BottleMissile.mdl',
         healSpray = 'Abilities\\Spells\\Other\\HealingSpray\\HealBottleMissile.mdl',
         transmute = 'Abilities\\Spells\\Other\\Transmute\\PileofGold.mdl',
+        wisp = 'Units\\NightElf\\Wisp\\Wisp.mdl',
         rainOfFire = 'Abilities\\Spells\\Demon\\RainOfFire\\RainOfFireTarget.mdl',
         howl = 'Abilities\\Spells\\Other\\HowlOfTerror\\HowlCaster.mdl',
         doom = 'Abilities\\Spells\\Other\\Doom\\DoomDeath.mdl',
@@ -1253,7 +1254,10 @@ do
         {key = 'regeneration', name = 'Regeneration', code = 'rlif', icon = 'BTNRingGreen', per = 0.3, flat = true, max = 5, desc = '+{v} health per second',
             apply = function(s, x) s.regen = s.regen + x end},
         {key = 'armor', name = 'Toughness', code = 'rde1', icon = 'BTNRingJadeFalcon', per = 1, flat = true, max = 5, desc = '+{v} armor',
-            apply = function(s, x) s.armor = s.armor + x end}
+            apply = function(s, x) s.armor = s.armor + x end},
+        {key = 'siphon', name = 'Siphon Life', code = 'AUav', icon = 'BTNVampiricAura', per = 0.01, max = 5,
+            desc = 'Attacks and spells heal for {v}\037 of their damage',
+            apply = function(s, x) s.lifesteal = s.lifesteal + x end}
     }
     local function talentCost(rank)
         return math.floor(60 * rank ^ 1.6 + 0.5)
@@ -1276,7 +1280,9 @@ do
         {key = 'wide', name = 'Wide Hand', code = 'AEbl', icon = 'BTNBlink', costs = {60},
             desc = 'Every hand deals four cards.'},
         {key = 'secondwind', name = 'Second Wind', code = 'AHre', icon = 'BTNResurrection', costs = {40},
-            desc = 'Return to life once per run at half health.'}
+            desc = 'Return to life once per run at half health.'},
+        {key = 'companion', name = 'Wisp Companion', code = 'ewsp', icon = 'BTNWisp', costs = {25, 35, 45},
+            desc = 'A wisp fetches experience gems and gold for you. Faster and wider-ranging per rank.'}
     }
     local PERK_BY_KEY = {}
     for _, perk in ipairs(PERKS) do
@@ -1985,6 +1991,47 @@ do
         BlzFrameSetSize(o.fill, math.max(0.0001, o.w * U.clamp(fraction, 0, 1)), o.h)
         if label then
             BlzFrameSetText(o.text, label)
+        end
+    end
+
+    -- Hover tooltip: a plate with an icon, a title, a grey line and a body.
+    -- Make it last in its parent so it draws over the rest; k scales it.
+    function UI.tooltip(parent, k, w, h)
+        local tip = {k = k, w = w * k, h = h * k}
+        tip.bg = UI.plate(parent, 0, 0, tip.w, tip.h, 245)
+        tip.icon = UI.icon(parent, TEX.white, 0, 0, 0.026 * k)
+        tip.title = UI.text(parent, '', 0, 0, tip.w, 0.015 * k, 0.0098 * k)
+        tip.sub = UI.text(parent, '', 0, 0, tip.w, 0.012 * k, 0.0074 * k)
+        tip.body = UI.text(parent, '', 0, 0, tip.w, tip.h, 0.0078 * k, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        tip.frames = {tip.bg, tip.icon.frame, tip.icon.img, tip.title, tip.sub, tip.body}
+        UI.hideTooltip(tip)
+        return tip
+    end
+
+    -- Shows the tooltip with its bottom-left corner at (x, bottom).
+    function UI.showTooltip(tip, x, bottom, icon, title, sub, body)
+        local k = tip.k
+        local top = bottom + tip.h
+        local size = 0.026 * k
+        local pad = size * 0.09
+        UI.place(tip.bg, x, top, tip.w, tip.h)
+        UI.place(tip.icon.frame, x + 0.011 * k - pad, top - 0.011 * k + pad, size + pad * 2, size + pad * 2)
+        UI.place(tip.icon.img, x + 0.011 * k, top - 0.011 * k, size, size)
+        UI.place(tip.title, x + 0.046 * k, top - 0.010 * k, tip.w - 0.056 * k, 0.015 * k)
+        UI.place(tip.sub, x + 0.046 * k, top - 0.025 * k, tip.w - 0.056 * k, 0.012 * k)
+        UI.place(tip.body, x + 0.011 * k, top - 0.046 * k, tip.w - 0.022 * k, tip.h - 0.054 * k)
+        UI.setIcon(tip.icon, icon)
+        BlzFrameSetText(tip.title, title)
+        BlzFrameSetText(tip.sub, U.col(GREY, sub))
+        BlzFrameSetText(tip.body, U.col('d8cfc0', body))
+        for _, f in ipairs(tip.frames) do
+            BlzFrameSetVisible(f, true)
+        end
+    end
+
+    function UI.hideTooltip(tip)
+        for _, f in ipairs(tip.frames) do
+            BlzFrameSetVisible(f, false)
         end
     end
 
@@ -2959,6 +3006,7 @@ do
                 detail = detail .. U.col(GREEN, '  (up from ' .. owned .. ')')
             end
             Hud.toast(icon, 'Loot: ' .. U.col(gearHex(ilvl), item.name), detail)
+            Hud.refreshGear()
         else
             local gold = 10 * ZONES[item.zone].tier
             G.addGold(gold)
@@ -3067,6 +3115,80 @@ do
                 i = i + 1
             end
         end
+    end
+
+    -- Wisp Companion perk: a wisp fetches experience gems and gold lying
+    -- outside the pickup range; whatever it touches flies to the hero.
+    function G.spawnCompanion()
+        local rank = Profile.perk('companion')
+        if rank <= 0 then
+            return
+        end
+        local x, y = R.hx - 90, R.hy + 70
+        local fx = AddSpecialEffect(FX.wisp, x, y)
+        BlzSetSpecialEffectScale(fx, 0.75)
+        R.companion = {fx = fx, x = x, y = y, speed = 380 + 90 * rank, reach = 900 + 250 * rank,
+            target = nil, clock = 0, bob = 0}
+    end
+
+    -- The nearest gem or coin to the wisp within its reach of the hero.
+    function G.companionTarget(c)
+        local best, bestD = nil, nil
+        local reach2 = c.reach * c.reach
+        local near2 = R.pickupRange * R.pickupRange
+        for _, p in ipairs(R.pickups) do
+            if (p.kind == 'xp' or p.kind == 'gold') and not p.flying then
+                local hx, hy = p.x - R.hx, p.y - R.hy
+                local h2 = hx * hx + hy * hy
+                if h2 <= reach2 and h2 > near2 then
+                    local dx, dy = p.x - c.x, p.y - c.y
+                    local d2 = dx * dx + dy * dy
+                    if bestD == nil or d2 < bestD then
+                        best, bestD = p, d2
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    function G.updateCompanion(dt)
+        local c = R.companion
+        if c == nil then
+            return
+        end
+        -- A target already on its way (pickup range, a magnet) is dropped.
+        if c.target and c.target.flying then
+            c.target = nil
+        end
+        c.clock = c.clock - dt
+        if c.target == nil and c.clock <= 0 then
+            c.clock = 0.25
+            c.target = G.companionTarget(c)
+        end
+        local t = c.target
+        local tx, ty, speed
+        if t then
+            tx, ty, speed = t.x, t.y, c.speed
+        else
+            -- Idle: floats behind the hero's shoulder, easing in.
+            tx, ty = R.hx - 90, R.hy + 70
+        end
+        local dx, dy = tx - c.x, ty - c.y
+        local d = math.sqrt(dx * dx + dy * dy)
+        speed = speed or math.min(d * 4, c.speed * 2)
+        local step = speed * dt
+        if t and d <= step + 30 then
+            t.flying = true
+            c.target = nil
+            c.x, c.y = t.x, t.y
+        elseif d > 1 then
+            local f = math.min(1, step / d)
+            c.x, c.y = c.x + dx * f, c.y + dy * f
+            BlzSetSpecialEffectYaw(c.fx, Atan2(dy, dx))
+        end
+        c.bob = c.bob + dt * 4
+        BlzSetSpecialEffectPosition(c.fx, c.x, c.y, G.groundZ(c.x, c.y) + 80 + 12 * math.sin(c.bob))
     end
 
     -- The original's Vampire Survivors curve: cheap early, steeper after 20 and 40.
@@ -4032,6 +4154,7 @@ do
         if R == nil or R.ended then
             return
         end
+        G.updateCompanion(dt)
         R.slowClock = R.slowClock - dt
         if R.slowClock <= 0 then
             R.slowClock = 0.25
@@ -4200,6 +4323,7 @@ do
             local x, y = G.spawnPoint(550, 750)
             G.createEnemy(G.pickEnemyType(), x, y, {})
         end
+        G.spawnCompanion()
         Hud.show()
         Hud.banner(U.col(GOLD, zone.name) .. '  -  ' .. zone.subtitle .. '  -  ' .. U.col(R.diff.hex, R.diff.name))
     end
@@ -4288,6 +4412,9 @@ do
         end
         for _, p in ipairs(R.pickups) do
             DestroyEffect(p.fx)
+        end
+        if R.companion then
+            DestroyEffect(R.companion.fx)
         end
         for _, p in ipairs(R.projectiles) do
             DestroyEffect(p.fx)
@@ -4490,48 +4617,39 @@ do
             Hud.meterRows[i] = row
         end
 
+        -- Inventory, under the zone name: the six items carried into the
+        -- run, two by three as on the Warcraft III console.
+        local invW, invH, cell, step = 0.084 * k, 0.128 * k, 0.028 * k, 0.034 * k
+        local ix0, itop0 = right - 0.006 - invW, 0.597 - 0.02 * k
+        Hud.invAt = {ix0, itop0, invH}
+        UI.plate(root, ix0, itop0, invW, invH, 225)
+        UI.text(root, U.col(GOLD, 'Inventory'), ix0, itop0 - 0.005 * k, invW, 0.014 * k, 0.0078 * k, TEXT_JUSTIFY_CENTER)
+        Hud.gearIcons = {}
+        for slot = 1, INVENTORY_SIZE do
+            local column = math.fmod(slot - 1, 2)
+            local row = (slot - 1) // 2
+            local o = UI.icon(root, TEX.white, ix0 + 0.011 * k + column * step, itop0 - 0.024 * k - row * (cell + 0.005 * k),
+                cell, nil, function()
+                    Hud.gearTip(slot)
+                end, Hud.hideTip)
+            Hud.gearIcons[slot] = o
+        end
+
         -- Tooltip of the hovered spell slot or blessing, made last so it
         -- draws over the rest of the HUD; Hud.showTip moves it into place.
-        local tip = {k = k, w = 0.25 * k, h = 0.1 * k}
-        tip.bg = UI.plate(root, 0, 0, tip.w, tip.h, 245)
-        tip.icon = UI.icon(root, TEX.white, 0, 0, 0.026 * k)
-        tip.title = UI.text(root, '', 0, 0, tip.w, 0.015 * k, 0.0098 * k)
-        tip.sub = UI.text(root, '', 0, 0, tip.w, 0.012 * k, 0.0074 * k)
-        tip.body = UI.text(root, '', 0, 0, tip.w, tip.h, 0.0078 * k, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
-        tip.frames = {tip.bg, tip.icon.frame, tip.icon.img, tip.title, tip.sub, tip.body}
-        Hud.tip = tip
-        Hud.hideTip()
+        Hud.tip = UI.tooltip(root, k, 0.25, 0.1)
 
         BlzFrameSetVisible(root, false)
     end
 
     -- Shows the tooltip with its bottom-left corner at (x, bottom).
     function Hud.showTip(x, bottom, icon, title, sub, body)
-        local tip = Hud.tip
-        local k = tip.k
-        local top = bottom + tip.h
-        local size = 0.026 * k
-        local pad = size * 0.09
-        UI.place(tip.bg, x, top, tip.w, tip.h)
-        UI.place(tip.icon.frame, x + 0.011 * k - pad, top - 0.011 * k + pad, size + pad * 2, size + pad * 2)
-        UI.place(tip.icon.img, x + 0.011 * k, top - 0.011 * k, size, size)
-        UI.place(tip.title, x + 0.046 * k, top - 0.010 * k, tip.w - 0.056 * k, 0.015 * k)
-        UI.place(tip.sub, x + 0.046 * k, top - 0.025 * k, tip.w - 0.056 * k, 0.012 * k)
-        UI.place(tip.body, x + 0.011 * k, top - 0.046 * k, tip.w - 0.022 * k, tip.h - 0.054 * k)
-        UI.setIcon(tip.icon, icon)
-        BlzFrameSetText(tip.title, title)
-        BlzFrameSetText(tip.sub, U.col(GREY, sub))
-        BlzFrameSetText(tip.body, U.col('d8cfc0', body))
-        for _, f in ipairs(tip.frames) do
-            BlzFrameSetVisible(f, true)
-        end
+        UI.showTooltip(Hud.tip, x, bottom, icon, title, sub, body)
     end
 
     function Hud.hideTip()
         if Hud.tip then
-            for _, f in ipairs(Hud.tip.frames) do
-                BlzFrameSetVisible(f, false)
-            end
+            UI.hideTooltip(Hud.tip)
         end
     end
 
@@ -4564,6 +4682,35 @@ do
         Hud.showTip(left + 0.01, 0.094 * k, U.icon(b.code, b.icon),
             U.col(GOLD, b.name) .. U.col(GREY, '   rank ' .. entry.rank), 'Blessing',
             G.describeBlessing(b, entry.value))
+    end
+
+    -- The carried items; an empty slot is a dark square.
+    function Hud.refreshGear()
+        if Hud.gearIcons == nil then
+            return
+        end
+        local worn = gearEquipped(Profile.data)
+        for slot, o in ipairs(Hud.gearIcons) do
+            local item = worn[slot]
+            if item then
+                UI.setIcon(o, gearIcon(item))
+            else
+                UI.setIcon(o, TEX.white)
+                UI.tint(o.img, 16, 12, 9, 235)
+            end
+        end
+    end
+
+    function Hud.gearTip(slot)
+        local item = gearEquipped(Profile.data)[slot]
+        if item == nil then
+            return
+        end
+        local ilvl = Profile.itemLevel(item)
+        local at = Hud.invAt
+        Hud.showTip(at[1] - Hud.tip.w - 0.004, at[2] - Hud.tip.h, gearIcon(item), U.col(gearHex(ilvl), item.name),
+            'Item level ' .. ilvl .. '  -  ' .. ZONES[item.zone].name,
+            G.describeBlessing(item.stat, Profile.itemValue(item, ilvl)))
     end
 
     -- A new interface size: build the HUD again in place.
@@ -4610,6 +4757,7 @@ do
         end
         Hud.hideTip()
         Hud.refreshSpells()
+        Hud.refreshGear()
         Hud.update()
         BlzFrameSetVisible(Hud.root, true)
         Hud.placeWorldFrames()
@@ -5694,13 +5842,20 @@ do
         UI.setLabel(Options.resume, inRun and 'Resume' or 'Close')
         UI.showButton(Options.restart, inRun)
         UI.showButton(Options.menu, inRun)
+        -- A browser page cannot close itself (the engine froze): no Quit there.
+        UI.showButton(Options.quit, not Engine.web())
         local p = Options.pages.main
         local bx, bw = p.x + 0.024, p.w - 0.048
         local top = p.top - 0.05
+        local gap = false
         for _, b in ipairs(Options.menuButtons) do
             if b == 'gap' then
-                top = top - 0.01
+                gap = true
             elseif b.visible then
+                if gap then
+                    top = top - 0.01
+                    gap = false
+                end
                 UI.moveButton(b, bx, top, bw, MENU.bh)
                 top = top - MENU.step
             end
@@ -6838,20 +6993,28 @@ do
         UI.card(page, x, top0, w, LAY.h, 'TALENTS')
         T.info = UI.text(page, '', ix, top0 - 0.042, iw, 0.013, 0.0078, TEXT_JUSTIFY_CENTER)
         local rowW = (iw - LAY.gap) / 2
+        local rowH = 0.046
         for i, talent in ipairs(TALENTS) do
             local column = math.fmod(i - 1, 2)
             local row = (i - 1) // 2
             local rx = ix + column * (rowW + LAY.gap)
-            local top = top0 - 0.064 - row * 0.062
+            local top = top0 - 0.064 - row * 0.05
             local o = {}
-            well(page, rx, top, rowW, 0.054)
-            o.icon = UI.icon(page, U.icon(talent.code, talent.icon), rx + 0.01, top - 0.009, 0.036)
-            local textW = rowW - 0.056 - 0.1
-            o.name = UI.text(page, '', rx + 0.056, top - 0.005, textW, 0.016, 0.0102)
-            o.rank = UI.text(page, '', rx + 0.056, top - 0.021, textW, 0.012, 0.0072)
-            o.desc = UI.text(page, '', rx + 0.056, top - 0.034, textW, 0.014, 0.0074)
+            well(page, rx, top, rowW, rowH)
+            o.icon = UI.icon(page, U.icon(talent.code, talent.icon), rx + 0.01, top - 0.007, 0.032)
+            local textW = rowW - 0.052 - 0.1
+            o.name = UI.text(page, '', rx + 0.052, top - 0.003, textW, 0.016, 0.0102)
+            o.rank = UI.text(page, '', rx + 0.052, top - 0.018, textW, 0.012, 0.0072)
+            o.desc = UI.text(page, '', rx + 0.052, top - 0.03, textW, 0.014, 0.0074)
+            -- Hovering the row shows what every rank gives; the buy button
+            -- is made after, so it stays on top and clickable.
+            UI.hit(page, rx, top, rowW, rowH, nil, function()
+                Lobby.talentTip(i, rx, top, rowH)
+            end, function()
+                UI.hideTooltip(T.tip)
+            end)
             local key = talent.key
-            o.buy = UI.button(page, rx + rowW - 0.092, top - 0.012, 0.082, 0.03, '', function()
+            o.buy = UI.button(page, rx + rowW - 0.092, top - 0.009, 0.082, 0.028, '', function()
                 Lobby.buyTalent(key)
             end, 'green', 0.0092)
             T.rows[i] = o
@@ -6867,6 +7030,30 @@ do
             Profile.save()
             Lobby.refresh()
         end, 'dark', 0.0088)
+        T.tip = UI.tooltip(page, 1, 0.3, 0.12)
+    end
+
+    -- A talent's ranks: what it gives now, per rank, at the next rank and at max.
+    function Lobby.talentTip(i, rx, top, rowH)
+        local T = Lobby.T
+        local talent = TALENTS[i]
+        local rank = Profile.talent(talent.key)
+        local lines = {'Each rank: ' .. G.describeBlessing(talent, talent.per)}
+        if rank > 0 then
+            lines[#lines + 1] = 'Now: ' .. G.describeBlessing(talent, talent.per * rank)
+        end
+        if rank < talent.max then
+            lines[#lines + 1] = 'Next rank: ' .. G.describeBlessing(talent, talent.per * (rank + 1))
+                .. U.col(GREY, '  (') .. U.col(GOLD, U.big(talentCost(rank + 1)) .. ' gold') .. U.col(GREY, ')')
+        end
+        lines[#lines + 1] = 'At rank ' .. talent.max .. ': ' .. G.describeBlessing(talent, talent.per * talent.max)
+        -- Under the row, or over it when the row sits low on the page.
+        local bottom = top - rowH - 0.004 - T.tip.h
+        if bottom < LAY.bottom + 0.01 then
+            bottom = top + 0.004
+        end
+        UI.showTooltip(T.tip, rx, bottom, U.icon(talent.code, talent.icon), U.col(GOLD, talent.name),
+            'Talent  -  rank ' .. rank .. ' / ' .. talent.max, table.concat(lines, '\n'))
     end
 
     function Lobby.buyTalent(key)
@@ -7034,16 +7221,16 @@ do
             local column = math.fmod(i - 1, 2)
             local row = (i - 1) // 2
             local x = lx + column * (cw + LAY.gap)
-            local top = LAY.top - 0.046 - row * 0.082
+            local top = LAY.top - 0.046 - row * 0.072
             local o = {}
-            well(page, x, top, cw, 0.074)
+            well(page, x, top, cw, 0.066)
             o.icon = UI.icon(page, U.icon(perk.code, perk.icon), x + 0.01, top - 0.01, 0.034)
             local textW = cw - 0.054 - 0.01
             o.name = UI.text(page, '', x + 0.054, top - 0.006, textW - 0.08, 0.015, 0.0096)
             o.rank = UI.text(page, '', x + cw - 0.09, top - 0.006, 0.08, 0.015, 0.0072, TEXT_JUSTIFY_RIGHT)
-            o.desc = UI.text(page, U.col('d8cfc0', perk.desc), x + 0.054, top - 0.024, textW, 0.024, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+            o.desc = UI.text(page, U.col('d8cfc0', perk.desc), x + 0.054, top - 0.021, textW, 0.022, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
             local key = perk.key
-            o.buy = UI.button(page, x + cw - 0.1, top - 0.048, 0.09, 0.022, '', function()
+            o.buy = UI.button(page, x + cw - 0.1, top - 0.042, 0.09, 0.02, '', function()
                 Lobby.buyPerk(key)
             end, 'green', 0.0082)
             W.rows[i] = o
@@ -7302,6 +7489,11 @@ do
     function Engine.active()
         local config = rawget(_G, 'SURVIVOR_ENGINE')
         return type(config) == 'table' and config.menu ~= nil and type(rawget(_G, 'EngineCvar')) == 'function'
+    end
+
+    -- The browser build (port/web/site/survivor.js sets survivor_web 1).
+    function Engine.web()
+        return Engine.active() and EngineCvar('survivor_web') == '1'
     end
 
     function Engine.loadingScreen(zone, background)

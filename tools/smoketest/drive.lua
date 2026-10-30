@@ -287,6 +287,34 @@ MOCK.click('gold')
 MOCK.click('Rewards')
 MOCK.click('Character')
 
+-- Wisp Companion perk: gems and coins beyond the pickup range reach the hero.
+Profile.data.perks.companion = 3
+S.heroIndex, S.difficulty = 1, 1
+G.startRun()
+run = R()
+check(run.companion ~= nil, 'the companion perk spawns a wisp')
+MOCK.pokeAll()
+G.dropPickup('gold', run.hx + 900, run.hy, 50)
+local farCoin = run.pickups[#run.pickups]
+G.dropPickup('xp', run.hx - 600, run.hy + 500, 3)
+local farGem = run.pickups[#run.pickups]
+local function lying(p)
+    for _, q in ipairs(R().pickups) do
+        if q == p then return true end
+    end
+    return false
+end
+for _ = 1, 60 do
+    MOCK.advance(0.25)
+    if R().hand then MOCK.tap(OSKEY_1) end
+    if not lying(farCoin) and not lying(farGem) then break end
+end
+check(not lying(farCoin) and not lying(farGem), 'the wisp fetched the far coin and gem')
+note('companion fetched far pickups')
+G.endRun(false)
+MOCK.click('Return to Camp')
+Profile.data.perks.companion = nil
+
 -- 5. Every hero with every spell of its pool at a high rank (no rank limit).
 for index, hero in ipairs(HEROES) do
     S.heroIndex = index
