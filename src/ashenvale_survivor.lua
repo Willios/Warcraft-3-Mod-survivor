@@ -1,0 +1,7131 @@
+-- Warcraft Survivors
+-- A survivors-style run for Warcraft III Reforged, written in Lua.
+--
+-- Editor setup:
+--   1. Scenario > Map Options: set the script language to Lua.
+--   2. Paste this whole file into the map-level Custom Script Code area.
+--   3. Keep one Map Initialization trigger whose only action is the custom
+--      script line: Survivor_Start()
+--   4. Disable the default Melee Initialization trigger.
+--
+-- Everything (lobby, HUD, level-up cards, saves) is built at runtime from
+-- Warcraft III's own textures, icons and models, so no imports are needed.
+-- Progress is saved to Documents\Warcraft III\CustomMapData\WarcraftSurvivors.
+--
+-- Never type a percent sign in this file: the World Editor runs custom script
+-- through printf and crashes on it. Inside strings write the escape \037
+-- instead, and use math.fmod(a, b) for the modulo operator.
+
+do
+    ---------------------------------------------------------------------------
+    -- Configuration
+    ---------------------------------------------------------------------------
+    local CFG = {
+        TICK = 0.03125,
+        RUN_LENGTH = 600.0,          -- the final boss arrives at 10:00
+        MAX_ENEMIES = 150,
+        MAX_PICKUPS = 220,
+        SPELL_SLOTS = 4,             -- spells and blessings have no rank limit
+        MAX_SUMMONS = 120,           -- pets alive at once (Persistence stacks them up)
+        HAND_SIZE = 3,
+        BASE_PICKUP = 170.0,
+        BASE_REROLLS = 2,
+        BASE_BANISHES = 1,
+        XP_RATE = 2,                 -- experience per gem point, as in the original
+        CAMERA_DISTANCE = 1850.0,
+        DAMAGE_NUMBERS = true,
+        DECOY_REACH = 700.0,         -- enemies this close to a Mirror Image attack it instead of the hero
+        IMAGE_DAMAGE_TAKEN = 3.0,    -- Mirror Images take triple damage (300 percent)
+        SHOW_MINIMAP = false,
+        SHOW_PORTRAIT = true,
+        ENEMY_PLAYER = 11,
+        SAVE_FILE = 'WarcraftSurvivors\\profile.pld',
+        FONT = 'Fonts\\FRIZQT__.TTF',
+    }
+
+    local TEX = {
+        white = 'UI\\Glues\\MainMenu\\MainMenu3D\\white32.blp',
+        marble = 'UI\\Widgets\\EscMenu\\Human\\human-options-menu-background.blp',
+        plate = 'UI\\Widgets\\Glues\\loading-namebackground.blp',
+        barFill = 'UI\\Feedback\\HPBarConsole\\human-healthbar-fill.blp',
+        barFrame = 'UI\\Feedback\\XPBar\\human-xpbar-border.blp',
+        iconFrame = 'UI\\Buttons\\HeroLevel\\herolevel-border.blp',
+        banner = 'UI\\Glues\\ScoreScreen\\scorescreen-goldbannerborder.blp',
+        glow = 'UI\\Glues\\ScoreScreen\\scorescreen-tab-hilight.blp',
+        -- Hover and selection light of the escape menu buttons.
+        highlight = 'UI\\Widgets\\EscMenu\\Human\\human-options-button-highlight.blp',
+        -- Fully transparent: a bordered backdrop with this background is an outline.
+        clear = 'UI\\Widgets\\EscMenu\\Human\\blank-background.blp',
+        -- Lobby title art (engine only, from src/art like the zone thumbnails).
+        title = 'Scripts\\Survivor\\title.tga',
+        -- Race crests: the capture-the-flag banners (classic command buttons, also in Reforged).
+        emblem = {
+            Alliance = 'ReplaceableTextures\\CommandButtons\\BTNHumanCaptureFlag.blp',
+            Horde = 'ReplaceableTextures\\CommandButtons\\BTNOrcCaptureFlag.blp',
+            Undead = 'ReplaceableTextures\\CommandButtons\\BTNUndeadCaptureFlag.blp',
+            ['Night Elf'] = 'ReplaceableTextures\\CommandButtons\\BTNNightElfCaptureFlag.blp',
+            Tavern = 'ReplaceableTextures\\CommandButtons\\BTNTavern.blp'
+        }
+    }
+
+    -- Stock BACKDROP templates (EscMenuTemplates.fdf, QuestDialog.fdf): the
+    -- classic Warcraft III menu borders, drawn with their own corner pieces.
+    local TPL = {
+        panel = 'EscMenuBackdrop',                        -- ornate gold escape-menu frame
+        box = 'QuestButtonBaseTemplate',                  -- dark wood plate, thin gold edge
+        iron = 'DialogBackdrop',                          -- riveted iron dialog frame (DialogWar3.fdf)
+        well = 'EscMenuControlBackdropTemplate',          -- sunken edit-box well
+        button = 'EscMenuButtonBackdropTemplate',
+        buttonOff = 'EscMenuButtonDisabledBackdropTemplate'
+    }
+
+    local FX = {
+        blizzard = 'Abilities\\Spells\\Human\\Blizzard\\BlizzardTarget.mdl',
+        thunderClap = 'Abilities\\Spells\\Human\\ThunderClap\\ThunderClapCaster.mdl',
+        stormBolt = 'Abilities\\Spells\\Human\\StormBolt\\StormBoltMissile.mdl',
+        holyLight = 'Abilities\\Spells\\Human\\HolyBolt\\HolyBoltSpecialArt.mdl',
+        flameStrike = 'Abilities\\Spells\\Human\\FlameStrike\\FlameStrikeTarget.mdl',
+        divineShield = 'Abilities\\Spells\\Human\\DivineShield\\DivineShieldTarget.mdl',
+        avatar = 'Abilities\\Spells\\Human\\Avatar\\AvatarCaster.mdl',
+        manaShield = 'Abilities\\Spells\\Human\\ManaShield\\ManaShieldCaster.mdl',
+        resurrect = 'Abilities\\Spells\\Human\\Resurrect\\ResurrectTarget.mdl',
+        teleport = 'Abilities\\Spells\\Human\\MassTeleport\\MassTeleportCaster.mdl',
+        warStomp = 'Abilities\\Spells\\Orc\\WarStomp\\WarStompCaster.mdl',
+        shockwave = 'Abilities\\Spells\\Orc\\Shockwave\\ShockwaveMissile.mdl',
+        earthquake = 'Abilities\\Spells\\Orc\\EarthQuake\\EarthQuakeTarget.mdl',
+        lightningShield = 'Abilities\\Spells\\Orc\\LightningShield\\LightningShieldTarget.mdl',
+        healingWave = 'Abilities\\Spells\\Orc\\HealingWave\\HealingWaveTarget.mdl',
+        bloodlust = 'Abilities\\Spells\\Orc\\Bloodlust\\BloodlustTarget.mdl',
+        feralSpirit = 'Abilities\\Spells\\Orc\\FeralSpirit\\feralspirittarget.mdl',
+        voodoo = 'Abilities\\Spells\\Orc\\Voodoo\\VoodooAuraTarget.mdl',
+        mirrorImage = 'Abilities\\Spells\\Orc\\MirrorImage\\MirrorImageCaster.mdl',
+        deathCoil = 'Abilities\\Spells\\Undead\\DeathCoil\\DeathCoilMissile.mdl',
+        deathCoilHit = 'Abilities\\Spells\\Undead\\DeathCoil\\DeathCoilSpecialArt.mdl',
+        animateDead = 'Abilities\\Spells\\Undead\\AnimateDead\\AnimateDeadTarget.mdl',
+        carrionSwarm = 'Abilities\\Spells\\Undead\\CarrionSwarm\\CarrionSwarmMissile.mdl',
+        vampiric = 'Abilities\\Spells\\Undead\\VampiricAura\\VampiricAuraTarget.mdl',
+        infernal = 'Units\\Demon\\Infernal\\InfernalBirth.mdl',
+        frostNova = 'Abilities\\Spells\\Undead\\FrostNova\\FrostNovaTarget.mdl',
+        frostArmor = 'Abilities\\Spells\\Undead\\FrostArmor\\FrostArmorTarget.mdl',
+        darkRitual = 'Abilities\\Spells\\Undead\\DarkRitual\\DarkRitualTarget.mdl',
+        deathAndDecay = 'Abilities\\Spells\\Undead\\DeathandDecay\\DeathandDecayTarget.mdl',
+        impale = 'Abilities\\Spells\\Undead\\Impale\\ImpaleMissTarget.mdl',
+        sleep = 'Abilities\\Spells\\Undead\\Sleep\\SleepSpecialArt.mdl',
+        manaBurn = 'Abilities\\Spells\\NightElf\\ManaBurn\\ManaBurnTarget.mdl',
+        immolation = 'Abilities\\Spells\\NightElf\\Immolation\\ImmolationTarget.mdl',
+        immolationHit = 'Abilities\\Spells\\Other\\ImmolationRed\\ImmolationRedDamage.mdl',
+        entangle = 'Abilities\\Spells\\NightElf\\EntanglingRoots\\EntanglingRootsTarget.mdl',
+        tranquility = 'Abilities\\Spells\\NightElf\\Tranquility\\TranquilityTarget.mdl',
+        starfall = 'Abilities\\Spells\\NightElf\\Starfall\\StarfallTarget.mdl',
+        fanOfKnives = 'Abilities\\Spells\\NightElf\\FanOfKnives\\FanOfKnivesCaster.mdl',
+        blink = 'Abilities\\Spells\\NightElf\\Blink\\BlinkCaster.mdl',
+        shadowStrike = 'Abilities\\Spells\\NightElf\\shadowstrike\\ShadowStrikeMissile.mdl',
+        moonGlaive = 'Abilities\\Weapons\\MoonPriestessMissile\\MoonPriestessMissile.mdl',
+        glaive = 'Abilities\\Weapons\\GlaiveMissile\\GlaiveMissile.mdl',
+        searingArrow = 'Abilities\\Weapons\\SearingArrow\\SearingArrowMissile.mdl',
+        blackArrow = 'Abilities\\Spells\\Other\\BlackArrow\\BlackArrowMissile.mdl',
+        tornado = 'Abilities\\Spells\\Other\\Tornado\\TornadoElementalSmall.mdl',
+        crushingWave = 'Abilities\\Spells\\Other\\CrushingWave\\CrushingWaveMissile.mdl',
+        silence = 'Abilities\\Spells\\Other\\Silence\\SilenceAreaBirth.mdl',
+        stampede = 'Abilities\\Spells\\Other\\Stampede\\StampedeMissileDeath.mdl',
+        breathOfFire = 'Abilities\\Spells\\Other\\BreathOfFire\\BreathOfFireMissile.mdl',
+        drunkenHaze = 'Abilities\\Spells\\Other\\StrongDrink\\BrewmasterTarget.mdl',
+        soulBurn = 'Abilities\\Spells\\Other\\SoulBurn\\SoulBurnbuff.mdl',
+        volcano = 'Abilities\\Spells\\Other\\Volcano\\VolcanoMissile.mdl',
+        incinerate = 'Abilities\\Spells\\Other\\Incinerate\\FireLordDeathExplode.mdl',
+        rocket = 'Abilities\\Weapons\\Mortar\\MortarMissile.mdl',
+        acidBomb = 'Abilities\\Spells\\Other\\AcidBomb\\BottleMissile.mdl',
+        healSpray = 'Abilities\\Spells\\Other\\HealingSpray\\HealBottleMissile.mdl',
+        transmute = 'Abilities\\Spells\\Other\\Transmute\\PileofGold.mdl',
+        rainOfFire = 'Abilities\\Spells\\Demon\\RainOfFire\\RainOfFireTarget.mdl',
+        howl = 'Abilities\\Spells\\Other\\HowlOfTerror\\HowlCaster.mdl',
+        doom = 'Abilities\\Spells\\Other\\Doom\\DoomDeath.mdl',
+        cleave = 'Abilities\\Spells\\Other\\Cleave\\CleaveDamageTarget.mdl',
+        levelUp = 'Abilities\\Spells\\Other\\Levelup\\LevelupCaster.mdl',
+        frostBolt = 'Abilities\\Weapons\\FrostWyrmMissile\\FrostWyrmMissile.mdl',
+        lichMissile = 'Abilities\\Weapons\\LichMissile\\LichMissile.mdl',
+        fireball = 'Abilities\\Weapons\\FireBallMissile\\FireBallMissile.mdl',
+        arcane = 'Abilities\\Weapons\\FaerieDragonMissile\\FaerieDragonMissile.mdl',
+        spirit = 'Abilities\\Weapons\\SpiritOfVengeanceMissile\\SpiritOfVengeanceMissile.mdl',
+        phoenix = 'Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile.mdl',
+        cryptFiend = 'Abilities\\Weapons\\CryptFiendMissile\\CryptFiendMissile.mdl',
+        hex = 'Abilities\\Spells\\Orc\\Purge\\PurgeBuffTarget.mdl',
+        bolt = 'Abilities\\Weapons\\Bolt\\BoltImpact.mdl',
+        genericHit = 'Abilities\\Weapons\\WaterElementalMissile\\WaterElementalMissile.mdl',
+        warning = 'Abilities\\Spells\\Human\\FlameStrike\\FlameStrikeTarget.mdl',
+        bossAura = 'Abilities\\Spells\\Other\\GeneralAuraTarget\\GeneralAuraTarget.mdl',
+        explosion = 'Objects\\Spawnmodels\\Other\\NeutralBuildingExplosion\\NeutralBuildingExplosion.mdl',
+        gemSmall = 'Abilities\\Weapons\\GreenDragonMissile\\GreenDragonMissile.mdl',
+        gemMedium = 'Abilities\\Weapons\\FaerieDragonMissile\\FaerieDragonMissile.mdl',
+        gemLarge = 'Abilities\\Weapons\\RedDragonBreath\\RedDragonMissile.mdl',
+        coin = 'Objects\\InventoryItems\\PotofGold\\PotofGold.mdl',
+        rune = 'Objects\\InventoryItems\\runicobject\\runicobject.mdl',
+        chest = 'Objects\\InventoryItems\\TreasureChest\\treasurechest.mdl'
+    }
+
+    -- WoW item-quality colours, used for card rarities and zone tiers.
+    local RARITY = {
+        {key = 'common', name = 'Common', hex = 'e6e6e6', rgb = {230, 230, 230}, bonus = 0.0, weight = 56},
+        {key = 'uncommon', name = 'Uncommon', hex = '1eff00', rgb = {30, 255, 0}, bonus = 0.15, weight = 27},
+        {key = 'rare', name = 'Rare', hex = '0070dd', rgb = {40, 130, 255}, bonus = 0.30, weight = 12},
+        {key = 'epic', name = 'Epic', hex = 'a335ee', rgb = {163, 53, 238}, bonus = 0.50, weight = 4.2},
+        {key = 'legendary', name = 'Legendary', hex = 'ff8000', rgb = {255, 128, 0}, bonus = 0.80, weight = 0.8}
+    }
+
+    local GOLD = 'ffd27a'
+    local GREY = '9c9488'
+    local GREEN = '33ff66'
+    local RED = 'ff4d4d'
+
+    -- World of Warcraft difficulties, unlocked zone by zone: clear Normal to
+    -- open Heroic, Heroic to open Mythic, Mythic to open Mythic+. Keystones
+    -- have no cap: every level compounds health and damage.
+    local DIFFICULTIES = {
+        {key = 'normal', name = 'Normal', hex = 'e6e6e6', hp = 1.0, dmg = 1.0, reward = 1.0, ilvl = 0,
+            blurb = 'The zone as it is.'},
+        {key = 'heroic', name = 'Heroic', hex = '0070dd', hp = 1.6, dmg = 1.4, reward = 1.5, ilvl = 10,
+            blurb = 'Tougher enemies and better loot.'},
+        {key = 'mythic', name = 'Mythic', hex = 'a335ee', hp = 2.6, dmg = 1.9, reward = 2.2, ilvl = 20,
+            blurb = 'For heroes in their best gear.'},
+        {key = 'mplus', name = 'Mythic+', hex = 'ff8000', hp = 2.6, dmg = 1.9, reward = 2.2, ilvl = 20,
+            blurb = 'Keystones with no end: every level is harder. Kill the final boss fast to upgrade the key.'}
+    }
+
+    -- Keystone timer: seconds after the final boss arrives, and the upgrade
+    -- earned for killing it within them.
+    local KEY_CHESTS = {{45, 3}, {80, 2}, {120, 1}}
+
+    local FACTIONS = {
+        {key = 'Alliance', hex = '6ab0ff', trait = 'Light of the Alliance',
+            lines = {'+10\037 experience', '+2 armor'},
+            apply = function(s) s.xp = s.xp + 0.10; s.armor = s.armor + 2 end},
+        {key = 'Horde', hex = 'ff5c3d', trait = 'Blood and Thunder',
+            lines = {'+8\037 damage', '+8\037 attack speed'},
+            apply = function(s) s.damage = s.damage + 0.08; s.attackSpeed = s.attackSpeed + 0.08 end},
+        {key = 'Undead', hex = '9fe07a', trait = 'Cannibalize',
+            lines = {'Every kill heals 1 health', '+5\037 damage reduction'},
+            apply = function(s) s.killHeal = s.killHeal + 1; s.dr = s.dr + 0.05 end},
+        {key = 'Night Elf', hex = 'c58cff', trait = 'Shadowmeld',
+            lines = {'+6\037 dodge', '+6\037 movement speed'},
+            apply = function(s) s.dodge = s.dodge + 0.06; s.move = s.move + 0.06 end},
+        {key = 'Tavern', hex = 'ffcc33', trait = 'Sellsword',
+            lines = {'+20\037 gold', '+5\037 critical strike'},
+            apply = function(s) s.gold = s.gold + 0.20; s.crit = s.crit + 0.05 end}
+    }
+
+    -- Every hero: rawcode, fallback icon, base stats, a starting spell and its
+    -- four Warcraft III abilities, the only spells its level-up cards offer.
+    local HEROES = {
+        {id = 'Hamg', name = 'Archmage', faction = 'Alliance', icon = 'BTNHeroArchMage', role = 'Frost caster',
+            hp = 330, damage = 26, blurb = 'Freezes whole packs in place and lets the storm do the work.',
+            start = 'blizzard', pool = {'blizzard', 'water_elemental', 'brilliance', 'arcane_missiles'}},
+        {id = 'Hmkg', name = 'Mountain King', faction = 'Alliance', icon = 'BTNHeroMountainKing', role = 'Bruiser',
+            hp = 470, damage = 34, blurb = 'Hammers and thunder. Stuns anything foolish enough to stand close.',
+            start = 'storm_bolt', pool = {'storm_bolt', 'thunder_clap', 'bash', 'avatar'}},
+        {id = 'Hpal', name = 'Paladin', faction = 'Alliance', icon = 'BTNHeroPaladin', role = 'Holy guardian',
+            hp = 480, damage = 30, blurb = 'Hard to kill and harder to outlast. Heals himself between swings.',
+            start = 'holy_light', pool = {'holy_light', 'divine_shield', 'devotion_aura', 'resurrection'}},
+        {id = 'Hblm', name = 'Blood Mage', faction = 'Alliance', icon = 'BTNHeroBloodElfPrince', role = 'Fire caster',
+            hp = 320, damage = 27, blurb = 'Sets the ground ablaze and keeps a phoenix circling close.',
+            start = 'flame_strike', pool = {'flame_strike', 'banish', 'siphon_mana', 'phoenix'}},
+
+        {id = 'Obla', name = 'Blademaster', faction = 'Horde', icon = 'BTNHeroBlademaster', role = 'Duelist', castAnim = 'attack slam',
+            hp = 430, damage = 36, blurb = 'Spins through the horde. Every swing can turn into a critical strike.',
+            start = 'bladestorm', pool = {'wind_walk', 'mirror_image', 'critical_strike', 'bladestorm'}},
+        {id = 'Ofar', name = 'Far Seer', faction = 'Horde', icon = 'BTNHeroFarseer', role = 'Storm caller',
+            hp = 340, damage = 27, blurb = 'Lightning leaps from foe to foe while spirit wolves hold the line.',
+            start = 'chain_lightning', pool = {'chain_lightning', 'far_sight', 'feral_spirit', 'earthquake'}},
+        {id = 'Otch', name = 'Tauren Chieftain', faction = 'Horde', icon = 'BTNHeroTaurenChieftain', role = 'Juggernaut',
+            hp = 520, damage = 35, blurb = 'Shockwaves split the field. Comes back once when he falls.',
+            start = 'shockwave', pool = {'shockwave', 'war_stomp', 'endurance_aura', 'reincarnation'}},
+        {id = 'Oshd', name = 'Shadow Hunter', faction = 'Horde', icon = 'BTNShadowHunter', role = 'Witch doctor',
+            hp = 350, damage = 26, blurb = 'Serpent wards and voodoo spirits fight for him. Hard to pin down.',
+            start = 'serpent_ward', pool = {'healing_wave', 'hex', 'serpent_ward', 'big_bad_voodoo'}},
+
+        {id = 'Udea', name = 'Death Knight', faction = 'Undead', icon = 'BTNHeroDeathKnight', role = 'Unholy knight',
+            hp = 470, damage = 33, blurb = 'Death Coil from range, an army of the dead up close.',
+            start = 'death_coil', pool = {'death_coil', 'death_pact', 'unholy_aura', 'animate_dead'}},
+        {id = 'Udre', name = 'Dreadlord', faction = 'Undead', icon = 'BTNHeroDreadLord', role = 'Vampire',
+            hp = 430, damage = 31, blurb = 'Bats tear through lines and every blow feeds him.',
+            start = 'carrion_swarm', pool = {'carrion_swarm', 'sleep', 'vampiric_aura', 'inferno'}},
+        {id = 'Ulic', name = 'Lich', faction = 'Undead', icon = 'BTNLichVersion2', role = 'Frost necromancer',
+            hp = 320, damage = 26, blurb = 'Frost Nova and orbiting ice shards. Nothing moves fast near him.',
+            start = 'frost_nova', pool = {'frost_nova', 'frost_armor', 'dark_ritual', 'death_and_decay'}},
+        {id = 'Ucrl', name = 'Crypt Lord', faction = 'Undead', icon = 'BTNHeroCryptLord', role = 'Swarm tank',
+            hp = 540, damage = 33, blurb = 'Impales whole lines and hides under a shell of spikes.',
+            start = 'impale', pool = {'impale', 'spiked_carapace', 'carrion_beetles', 'locust_swarm'}},
+
+        {id = 'Edem', name = 'Demon Hunter', faction = 'Night Elf', icon = 'BTNHeroDemonHunter', role = 'Burning blade',
+            hp = 420, damage = 33, blurb = 'Burns everything around him and slips through attacks.',
+            start = 'immolation', pool = {'mana_burn', 'immolation', 'evasion', 'metamorphosis'}},
+        {id = 'Ekee', name = 'Keeper of the Grove', short = 'Keeper', faction = 'Night Elf', icon = 'BTNKeeperOfTheGrove', role = 'Nature caller',
+            hp = 360, damage = 27, blurb = 'Roots the swarm in place while treants wade in.',
+            start = 'entangling_roots', pool = {'entangling_roots', 'force_of_nature', 'thorns_aura', 'tranquility'}},
+        {id = 'Emoo', name = 'Priestess of the Moon', short = 'Priestess', faction = 'Night Elf', icon = 'BTNPriestessOfTheMoon', role = 'Archer',
+            hp = 340, damage = 30, blurb = 'Volleys of searing arrows under a falling sky.',
+            start = 'searing_arrows', pool = {'scout', 'searing_arrows', 'trueshot_aura', 'starfall'}},
+        {id = 'Ewar', name = 'Warden', faction = 'Night Elf', icon = 'BTNHeroWarden', role = 'Assassin',
+            hp = 380, damage = 32, blurb = 'Fans of knives in every direction and spirits of vengeance behind.',
+            start = 'fan_of_knives', pool = {'fan_of_knives', 'blink_strike', 'shadow_strike', 'vengeance'}},
+
+        {id = 'Nngs', name = 'Naga Sea Witch', faction = 'Tavern', icon = 'BTNNagaSeaWitch', role = 'Tide caller',
+            hp = 340, damage = 27, blurb = 'Forked lightning and crushing tides, behind a mana shield.',
+            start = 'forked_lightning', pool = {'forked_lightning', 'frost_arrows', 'mana_shield', 'tornado'}},
+        {id = 'Nbrn', name = 'Dark Ranger', faction = 'Tavern', icon = 'BTNBansheeRanger', role = 'Ranger',
+            hp = 330, damage = 30, blurb = 'Black arrows and drained life. Never stops shooting.',
+            start = 'black_arrow', pool = {'silence', 'black_arrow', 'life_drain', 'charm'}},
+        {id = 'Nbst', name = 'Beastmaster', faction = 'Tavern', icon = 'BTNBeastMaster', role = 'Pack leader',
+            hp = 450, damage = 31, blurb = 'Brings a bear, a quilbeast and a stampede to every fight.',
+            start = 'summon_bear', pool = {'summon_bear', 'summon_quilbeast', 'summon_hawk', 'stampede'}},
+        {id = 'Npbm', name = 'Pandaren Brewmaster', short = 'Brewmaster', faction = 'Tavern', icon = 'BTNPandarenBrewmaster', role = 'Brawler',
+            hp = 470, damage = 32, blurb = 'Breathes fire, staggers out of harm and splits into elements.',
+            start = 'breath_of_fire', pool = {'breath_of_fire', 'drunken_haze', 'drunken_brawler', 'storm_earth_fire'}},
+        {id = 'Nfir', name = 'Firelord', faction = 'Tavern', icon = 'BTNHeroAvatarOfFlame', role = 'Living flame',
+            hp = 400, damage = 29, blurb = 'Soul Burn, lava spawn and a volcano under the enemy.',
+            start = 'soul_burn', pool = {'soul_burn', 'lava_spawn', 'incinerate', 'volcano'}},
+        {id = 'Ntin', name = 'Goblin Tinker', faction = 'Tavern', icon = 'BTNHeroTinker', role = 'Engineer',
+            hp = 380, damage = 28, blurb = 'Rockets, a goblin factory and a robot suit when it gets close.',
+            start = 'cluster_rockets', pool = {'pocket_factory', 'cluster_rockets', 'engineering', 'robo_goblin'}},
+        {id = 'Nalc', name = 'Goblin Alchemist', faction = 'Tavern', icon = 'BTNHeroAlchemist', role = 'Chemist',
+            hp = 430, damage = 30, blurb = 'Acid, healing spray and a chemical rage. Turns kills into gold.',
+            start = 'acid_bomb', pool = {'healing_spray', 'chemical_rage', 'acid_bomb', 'transmute'}},
+        {id = 'Nplh', name = 'Pit Lord', faction = 'Tavern', icon = 'BTNPitLord', role = 'Demon',
+            hp = 540, damage = 34, blurb = 'Rains fire on the battlefield and cleaves what survives.',
+            start = 'rain_of_fire', pool = {'rain_of_fire', 'howl_of_terror', 'cleave', 'doom'}}
+    }
+
+    ---------------------------------------------------------------------------
+    -- Spells. Each kind has its own runtime behaviour (see the CAST table):
+    --   bolt     homing missiles at the nearest enemies
+    --   nova     burst around the hero (or around the nearest enemy)
+    --   zone     waves on the densest pack, or around the hero
+    --   chain    lightning that jumps, or forks from the hero
+    --   line     piercing wave towards the nearest enemy
+    --   orbit    missiles circling the hero
+    --   aura     damage around the hero every interval
+    --   summon   temporary units that fight for the hero
+    --   heal     restores health when the hero is hurt
+    --   buff     temporary stat boost when enemies are close or health is low
+    --   passive  permanent stat boost
+    -- Values grow with rank, without limit (only the extra lives stop at 1);
+    -- rarity adds power when the card is picked.
+    -- Summons last as long as their cooldown, so one wave is out at a time;
+    -- spell duration (Persistence) keeps them longer and they pile up.
+    ---------------------------------------------------------------------------
+    local SPELLS = {}
+    local SPELL_ORDER = {}
+    local function spell(key, def)
+        def.key = key
+        SPELLS[key] = def
+    end
+
+    -- ' / 3' for a spell with a rank limit, nothing for the others.
+    local function rankLimit(max)
+        return max and (' / ' .. max) or ''
+    end
+
+    local function rankNote(max)
+        return max and ('  -  up to rank ' .. max) or '  -  no rank limit'
+    end
+
+    -- Alliance
+    spell('blizzard', {name = 'Blizzard', code = 'AHbz', icon = 'BTNBlizzard', kind = 'zone', cd = 7.0, dmg = 30,
+        radius = 260, range = 950, waves = 6, interval = 0.45, spread = 3, fx = FX.blizzard, slow = 0.35, waveSound = 'BlizzardWave',
+        desc = 'Calls {waves} waves of ice on the densest pack. Each wave deals {dmg} damage within {radius} and slows by 35\037.'})
+    spell('water_elemental', {name = 'Water Elemental', code = 'AHwe', icon = 'BTNSummonWaterElemental', kind = 'summon',
+        cd = 16.0, count = 1, countEvery = 3, units = {'hwat', 'hwat', 'hwt2', 'hwt2', 'hwt3'}, dmg = 30, hp = 520,
+        birth = FX.teleport, desc = 'Summons {count} Water Elemental for {dur} sec. It hits for {dmg}.'})
+    spell('brilliance', {name = 'Brilliance Aura', code = 'AHab', icon = 'BTNBrilliance', kind = 'aura', per = 0.05,
+        interval = 1.0, dmg = 12, radius = 260, fx = FX.arcane,
+        apply = function(s, v) s.cdr = s.cdr + v.amount end,
+        desc = 'Arcane sparks hit enemies within {radius} for {dmg} damage every second. Spells recharge {pct}\037 faster.'})
+    spell('arcane_missiles', {name = 'Mass Teleport', code = 'AHmt', icon = 'BTNMassTeleport', kind = 'bolt', cd = 2.2,
+        dmg = 20, count = 3, countEvery = 2, range = 900, missile = FX.arcane, speed = 1100, scale = 0.8,
+        desc = 'Opens a rift that hurls {count} arcane bolts at the nearest enemies for {dmg} damage each.'})
+    spell('frost_nova', {name = 'Frost Nova', code = 'AUfn', icon = 'BTNGlacier', kind = 'nova', cd = 5.0, dmg = 48,
+        radius = 230, range = 800, atTarget = true, fx = FX.frostNova, slow = 0.5, slowDur = 3.0,
+        desc = 'Blasts the nearest enemy and everything within {radius} for {dmg} damage, slowing them by 50\037.'})
+    spell('mana_shield', {name = 'Mana Shield', code = 'ANms', icon = 'BTNNeutralManaShield', kind = 'aura', per = 0.04,
+        interval = 1.0, dmg = 11, radius = 230, fx = FX.manaBurn, attach = FX.manaShield,
+        apply = function(s, v) s.dr = s.dr + v.amount end,
+        desc = 'The shield shocks enemies within {radius} for {dmg} damage every second. Takes {pct}\037 less damage.'})
+    spell('flame_strike', {name = 'Flame Strike', code = 'AHfs', icon = 'BTNWallOfFire', kind = 'zone', cd = 6.0, dmg = 26,
+        radius = 220, range = 900, delay = 0.5, waves = 5, interval = 0.5, spread = 1, fx = FX.flameStrike,
+        desc = 'Engulfs the densest pack in flames: {waves} bursts of {dmg} damage within {radius}.'})
+    spell('banish', {name = 'Banish', code = 'AHbn', icon = 'BTNBanish', kind = 'bolt', cd = 3.0, dmg = 55, count = 1,
+        countEvery = 2, range = 800, instant = true, impact = FX.manaBurn, slow = 0.5, slowDur = 2.5,
+        desc = 'Banishes {count} nearby enemy into the ether: {dmg} magic damage and slowed by 50\037.'})
+    spell('chain_lightning', {name = 'Chain Lightning', code = 'AOcl', icon = 'BTNChainLightning', kind = 'chain', cd = 3.2,
+        dmg = 46, count = 4, countEvery = 1, range = 850, jump = 420, falloff = 0.88, lightning = 'CLPB', lightning2 = 'CLSB',
+        impact = FX.bolt, desc = 'Lightning strikes the nearest enemy for {dmg} damage and jumps to {count} more.'})
+    spell('far_sight', {name = 'Far Sight', code = 'AOfs', icon = 'BTNFarSight', kind = 'zone', cd = 8.0, dmg = 38,
+        radius = 320, range = 1200, waves = 3, interval = 0.45, strikes = true, count = 3, countEvery = 2, fx = FX.bolt,
+        desc = 'Sees the largest pack within {radius} and calls {waves} rounds of {count} lightning strikes on it, {dmg} damage each.'})
+
+    spell('storm_bolt', {name = 'Storm Bolt', code = 'AHtb', icon = 'BTNStormBolt', kind = 'bolt', cd = 2.6, dmg = 60,
+        count = 1, countEvery = 2, range = 800, missile = FX.stormBolt, speed = 1000, stun = 1.0,
+        desc = 'Hurls {count} magic hammer at the nearest enemy for {dmg} damage, stunning for {stun} sec.'})
+    spell('thunder_clap', {name = 'Thunder Clap', code = 'AHtc', icon = 'BTNThunderclap', kind = 'nova', anim = 'spell slam', cd = 3.8, dmg = 42,
+        radius = 260, fx = FX.thunderClap, slow = 0.5, slowDur = 2.5,
+        desc = 'Slams the ground for {dmg} damage to enemies within {radius} and slows them by 50\037.'})
+    spell('bash', {name = 'Bash', code = 'AHbh', icon = 'BTNBash', kind = 'passive', per = 0.05,
+        apply = function(s, v) s.bash = s.bash + v.amount; s.bashDamage = s.bashDamage + 15 * v.rank end,
+        desc = 'Attacks have a {pct}\037 chance to stun for 1 sec and deal extra damage.'})
+    spell('avatar', {name = 'Avatar', code = 'AHav', icon = 'BTNAvatar', kind = 'buff', cd = 24.0, dur = 8, per = 0.10, basePct = 0.2,
+        trigger = 'enemies', fx = FX.avatar, scale = 1.35, dmg = 60, radius = 300, burstFx = FX.thunderClap,
+        apply = function(s, v) s.damage = s.damage + v.bonus; s.armor = s.armor + 5 end,
+        desc = 'When surrounded, grows huge with a shockwave of {dmg} damage within {radius}, then has +{pct2}\037 damage and +5 armor for {dur} sec.'})
+    spell('cleave', {name = 'Cleaving Attack', code = 'ANca', icon = 'BTNCleavingAttack', kind = 'passive', per = 0.12,
+        apply = function(s, v) s.cleave = s.cleave + v.amount end,
+        desc = 'Basic attacks splash {pct}\037 of their damage to nearby enemies.'})
+    spell('war_stomp', {name = 'War Stomp', code = 'AOws', icon = 'BTNWarStomp', kind = 'nova', cd = 6.0, dmg = 40,
+        radius = 280, fx = FX.warStomp, stun = 1.2,
+        desc = 'Stomps for {dmg} damage within {radius}, stunning enemies for {stun} sec.'})
+    spell('devotion_aura', {flat = true, name = 'Devotion Aura', code = 'AHad', icon = 'BTNDevotion', kind = 'aura', per = 2,
+        interval = 1.0, dmg = 11, radius = 240, fx = FX.holyLight, attach = 'Abilities\\Spells\\Human\\DevotionAura\\DevotionAura.mdl',
+        apply = function(s, v) s.armor = s.armor + v.amount end,
+        desc = 'Holy light burns enemies within {radius} for {dmg} damage every second. Grants {pct} armor.'})
+    spell('critical_strike', {name = 'Critical Strike', code = 'AOcr', icon = 'BTNCriticalStrike', kind = 'passive', per = 0.04,
+        apply = function(s, v) s.crit = s.crit + v.amount; s.critMult = s.critMult + 0.1 * v.rank end,
+        desc = '+{pct}\037 critical strike chance and stronger critical hits.'})
+
+    spell('holy_light', {name = 'Holy Light', code = 'AHhb', icon = 'BTNHolyBolt', kind = 'heal', cd = 6.0, heal = 60,
+        threshold = 0.85, dmg = 45, radius = 260, fx = FX.holyLight,
+        desc = 'When hurt or surrounded, heals {heal} health and sears enemies within {radius} for {dmg} damage.'})
+    spell('divine_shield', {name = 'Divine Shield', code = 'AHds', icon = 'BTNDivineIntervention', kind = 'buff', cd = 30.0,
+        dur = 2.5, trigger = 'enemies', invulnerable = true, fx = FX.divineShield, dmg = 70, radius = 300, burstFx = FX.holyLight,
+        desc = 'When surrounded, bursts with holy light for {dmg} damage within {radius} and becomes invulnerable for {dur} sec.'})
+    spell('resurrection', {name = 'Resurrection', code = 'AHre', icon = 'BTNResurrection', kind = 'passive', maxRank = 1,
+        apply = function(s) s.lives = s.lives + 1 end, desc = 'Return to life once per run with half health.'})
+    spell('consecration', {name = 'Consecration', code = 'AHhb', icon = 'BTNHolyBolt', kind = 'aura', interval = 0.75,
+        dmg = 14, radius = 230, fx = FX.holyLight, attach = 'Abilities\\Spells\\Human\\DevotionAura\\DevotionAura.mdl',
+        desc = 'Holy ground under the hero deals {dmg} damage every 0.75 sec within {radius}.'})
+    spell('siphon_mana', {name = 'Siphon Life', code = 'AHdr', icon = 'BTNManaDrain', kind = 'chain', cd = 2.8, dmg = 30,
+        count = 2, countEvery = 2, range = 700, fork = true, lightning = 'DRAL', leech = 0.25, impact = FX.vampiric,
+        desc = 'Drains {count} nearby enemies for {dmg} damage, healing for a quarter of it.'})
+    spell('phoenix', {name = 'Phoenix', code = 'AHpx', icon = 'BTNMarkOfFire', kind = 'orbit', count = 1, countEvery = 4,
+        dmg = 34, orbitRadius = 230, hitRadius = 90, speed = 1.6, missile = FX.phoenix, scale = 1.2,
+        desc = '{count} phoenix circles the hero, burning enemies it passes for {dmg} damage.'})
+    spell('fireball', {name = 'Fireball', code = 'ANfb', icon = 'BTNFireBolt', kind = 'bolt', cd = 2.0, dmg = 42, count = 1,
+        countEvery = 2, range = 900, missile = FX.fireball, speed = 900, splash = 140,
+        desc = 'Launches {count} fireball for {dmg} damage that splashes nearby enemies.'})
+    spell('rain_of_fire', {name = 'Rain of Fire', code = 'ANrf', icon = 'BTNFire', kind = 'zone', cd = 7.0, dmg = 34,
+        radius = 280, range = 950, waves = 5, interval = 0.55, spread = 3, fx = FX.rainOfFire, waveSound = 'RainOfFireWave',
+        desc = 'Rains fire on the densest pack: {waves} waves of {dmg} damage within {radius}.'})
+    spell('immolation', {name = 'Immolation', code = 'AEim', icon = 'BTNImmolationOn', kind = 'aura', interval = 0.5,
+        dmg = 11, radius = 220, fx = FX.immolationHit, attach = FX.immolation,
+        desc = 'Burns enemies within {radius} for {dmg} damage every 0.5 sec.'})
+    spell('incinerate', {flat = true, name = 'Incinerate', code = 'ANic', icon = 'BTNIncinerateOn', kind = 'passive', per = 14,
+        apply = function(s, v) s.explode = s.explode + v.amount end,
+        desc = 'Slain enemies explode for {pct} damage to enemies near them.'})
+
+    -- Horde
+    spell('bladestorm', {name = 'Bladestorm', code = 'AOww', icon = 'BTNWhirlwind', kind = 'zone', cd = 6.5, dmg = 22,
+        radius = 230, follow = true, waves = 8, interval = 0.3, fx = FX.mirrorImage, spinAnim = true,
+        desc = 'Spins for {waves} strikes of {dmg} damage to everything within {radius}.'})
+    spell('wind_walk', {name = 'Wind Walk', code = 'AOwk', icon = 'BTNWindWalkOn', kind = 'buff', cd = 12.0, dur = 4,
+        per = 0.08, trigger = 'enemies', fade = 110, dmg = 80, radius = 200, burstFx = FX.cleave, sound = 'WindWalk',
+        apply = function(s, v) s.move = s.move + 0.3; s.crit = s.crit + v.amount end,
+        desc = 'When surrounded, a backstab deals {dmg} damage within {radius}, then +30\037 movement speed and +{pct}\037 critical chance for {dur} sec.'})
+    spell('mirror_image', {name = 'Mirror Image', code = 'AOmi', icon = 'BTNMirrorImage', kind = 'nova', cd = 6.0, dmg = 50,
+        radius = 260, fx = FX.mirrorImage, images = true,
+        desc = 'Splits into images that slash every enemy within {radius} for {dmg} damage.'})
+    spell('endurance_aura', {name = 'Endurance Aura', code = 'AOae', icon = 'BTNCommand', kind = 'aura', per = 0.05,
+        interval = 1.0, dmg = 12, radius = 240, fx = FX.cleave,
+        apply = function(s, v) s.move = s.move + v.amount; s.attackSpeed = s.attackSpeed + v.amount end,
+        desc = 'Nearby enemies within {radius} take {dmg} damage every second. +{pct}\037 movement and attack speed.'})
+    spell('bloodlust', {name = 'Bloodlust', code = 'Ablo', icon = 'BTNBloodLust', kind = 'buff', cd = 16.0, dur = 7,
+        per = 0.08, basePct = 0.25, trigger = 'enemies', fx = FX.bloodlust, scale = 1.15,
+        apply = function(s, v) s.attackSpeed = s.attackSpeed + v.bonus; s.move = s.move + 0.1 end,
+        desc = 'Frenzies for {dur} sec: +{pct2}\037 attack speed and +10\037 movement speed.'})
+    spell('shockwave', {name = 'Shockwave', code = 'AOsh', icon = 'BTNShockWave', kind = 'line', cd = 3.5, dmg = 55,
+        count = 1, countEvery = 2, range = 900, width = 130, speed = 1050, missile = FX.shockwave,
+        desc = 'Sends {count} shockwave through enemies in a line for {dmg} damage.'})
+    spell('evasion', {name = 'Evasion', code = 'AEev', icon = 'BTNEvasion', kind = 'passive', per = 0.05,
+        apply = function(s, v) s.dodge = s.dodge + v.amount end, desc = '{pct}\037 chance to dodge attacks.'})
+    spell('feral_spirit', {name = 'Feral Spirit', code = 'AOsf', icon = 'BTNSpiritWolf', kind = 'summon', cd = 15.0, 
+        count = 2, countEvery = 2, units = {'osw1', 'osw1', 'osw2', 'osw2', 'osw3'}, dmg = 18, hp = 300, birth = FX.feralSpirit,
+        desc = 'Calls {count} spirit wolves for {dur} sec. Each bites for {dmg}.'})
+    spell('earthquake', {name = 'Earthquake', code = 'AOeq', icon = 'BTNEarthquake', kind = 'zone', cd = 8.0, dmg = 22,
+        radius = 320, range = 900, waves = 7, interval = 0.5, spread = 1, fx = FX.earthquake, slow = 0.5,
+        desc = 'Shakes the densest pack: {waves} tremors of {dmg} damage within {radius}, slowing by 50\037.'})
+    spell('lightning_shield', {name = 'Lightning Shield', code = 'AOls', icon = 'BTNLightningShield', kind = 'aura',
+        interval = 0.5, dmg = 13, radius = 190, fx = FX.bolt, attach = FX.lightningShield,
+        desc = 'A crackling shield deals {dmg} damage every 0.5 sec to enemies within {radius}.'})
+    spell('forked_lightning', {name = 'Forked Lightning', code = 'ANfl', icon = 'BTNMonsoon', kind = 'chain', cd = 2.6,
+        dmg = 34, count = 3, countEvery = 1, range = 750, fork = true, lightning = 'FORK', impact = FX.bolt,
+        desc = 'Forks lightning into the {count} nearest enemies for {dmg} damage each.'})
+    spell('healing_wave', {name = 'Healing Wave', code = 'AOhw', icon = 'BTNHealingWave', kind = 'heal', cd = 8.0, heal = 80,
+        threshold = 0.75, dmg = 40, radius = 280, fx = FX.healingWave,
+        desc = 'When hurt or surrounded, a healing wave restores {heal} health and hits enemies within {radius} for {dmg} damage.'})
+    spell('reincarnation', {name = 'Reincarnation', code = 'AOre', icon = 'BTNReincarnation', kind = 'passive', maxRank = 1,
+        apply = function(s) s.lives = s.lives + 1 end, desc = 'Rise again once per run with half health.'})
+    spell('stampede', {name = 'Stampede', code = 'ANst', icon = 'BTNStampede', kind = 'zone', cd = 9.0, dmg = 26,
+        radius = 300, range = 900, waves = 8, interval = 0.35, spread = 4, fx = FX.stampede,
+        desc = 'Lizards trample the densest pack: {waves} waves of {dmg} damage within {radius}.'})
+    spell('serpent_ward', {name = 'Serpent Ward', code = 'AOsw', icon = 'BTNSerpentWard', kind = 'summon', cd = 9.0, 
+        count = 1, countEvery = 1, ward = true, units = {'osp1', 'osp1', 'osp2', 'osp2', 'osp3'}, dmg = 18, hp = 120,
+        birth = FX.teleport, desc = 'Plants {count} serpent ward for {dur} sec. Each spits for {dmg}.'})
+    spell('hex', {name = 'Hex', code = 'AOhx', icon = 'BTNHex', kind = 'bolt', cd = 3.5, dmg = 35, count = 2, countEvery = 2,
+        range = 800, missile = FX.lichMissile, speed = 900, slow = 0.7, slowDur = 3.0, impact = FX.hex,
+        desc = 'Hexes the {count} nearest enemies for {dmg} damage and cripples them (70\037 slow).'})
+    spell('big_bad_voodoo', {name = 'Big Bad Voodoo', code = 'AOvd', icon = 'BTNBigBadVoodooSpell', kind = 'buff', cd = 35.0,
+        dur = 3, trigger = 'enemies', invulnerable = true, fx = FX.voodoo, dmg = 75, radius = 320, burstFx = FX.voodoo,
+        desc = 'When surrounded, curses enemies within {radius} for {dmg} damage and becomes invulnerable for {dur} sec.'})
+    spell('shadow_strike', {name = 'Shadow Strike', code = 'AEsh', icon = 'BTNShadowStrike', kind = 'bolt', cd = 2.6, dmg = 30,
+        count = 1, countEvery = 2, range = 850, missile = FX.shadowStrike, speed = 1100, dot = 14, dotDur = 4, slow = 0.4, slowDur = 2,
+        desc = 'Throws {count} poisoned dagger: {dmg} damage, then {dot} damage per second for 4 sec.'})
+    spell('voodoo_spirits', {name = 'Voodoo Spirits', code = 'AOvd', icon = 'BTNSpiritOfVengeance', kind = 'orbit', count = 2,
+        countEvery = 2, dmg = 22, orbitRadius = 200, hitRadius = 80, speed = 2.0, missile = FX.spirit,
+        desc = '{count} spirits orbit the hero, hitting enemies for {dmg} damage.'})
+
+    -- Undead
+    spell('death_coil', {name = 'Death Coil', code = 'AUdc', icon = 'BTNDeathCoil', kind = 'bolt', cd = 2.2, dmg = 52, count = 1,
+        countEvery = 2, range = 900, missile = FX.deathCoil, speed = 900, impact = FX.deathCoilHit, leech = 0.15,
+        desc = 'Hurls {count} coil of death for {dmg} damage. Heals for 15\037 of the damage.'})
+    spell('death_pact', {name = 'Death Pact', code = 'AUdp', icon = 'BTNDeathPact', kind = 'heal', cd = 14.0, heal = 150,
+        threshold = 0.5, dmg = 40, radius = 300, fx = FX.darkRitual,
+        desc = 'Below half health, devours life around the hero: {heal} health and {dmg} damage within {radius}.'})
+    spell('unholy_aura', {flat = true, name = 'Unholy Aura', code = 'AUau', icon = 'BTNUnholyAura', kind = 'aura', per = 0.6,
+        interval = 1.0, dmg = 11, radius = 240, fx = FX.deathCoilHit,
+        apply = function(s, v) s.regen = s.regen + v.amount; s.move = s.move + 0.03 * v.rank end,
+        desc = 'Rot hits enemies within {radius} for {dmg} damage every second. +{pct} health per second and +{rank3}\037 movement speed.'})
+    spell('animate_dead', {name = 'Animate Dead', code = 'AUan', icon = 'BTNAnimateDead', kind = 'summon', cd = 18.0, 
+        count = 3, countEvery = 1, units = {'uske'}, dmg = 16, hp = 240, birth = FX.animateDead,
+        desc = 'Raises {count} skeletons for {dur} sec. Each strikes for {dmg}.'})
+    spell('death_and_decay', {name = 'Death and Decay', code = 'AUdd', icon = 'BTNDeathAndDecay', kind = 'zone', cd = 9.0,
+        dmg = 24, radius = 330, range = 900, waves = 8, interval = 0.5, spread = 2, fx = FX.deathAndDecay,
+        desc = 'Rots the densest pack: {waves} pulses of {dmg} damage within {radius}.'})
+    spell('howl_of_terror', {name = 'Howl of Terror', code = 'ANht', icon = 'BTNHowlOfTerror', kind = 'nova', cd = 7.0,
+        dmg = 30, radius = 380, fx = FX.howl, slow = 0.45, slowDur = 4.0,
+        desc = 'Howls for {dmg} damage within {radius}, slowing enemies by 45\037 for 4 sec.'})
+    spell('vampiric_aura', {name = 'Vampiric Aura', code = 'AUav', icon = 'BTNVampiricAura', kind = 'aura', per = 0.025,
+        interval = 1.0, dmg = 12, radius = 240, fx = FX.vampiric,
+        apply = function(s, v) s.lifesteal = s.lifesteal + v.amount end,
+        desc = 'Drains enemies within {radius} for {dmg} damage every second. Heals for {pct}\037 of all damage dealt.'})
+    spell('carrion_swarm', {name = 'Carrion Swarm', code = 'AUcs', icon = 'BTNCarrionSwarm', kind = 'line', cd = 3.2, dmg = 52,
+        count = 1, countEvery = 2, range = 850, width = 150, speed = 950, missile = FX.carrionSwarm,
+        desc = 'Unleashes {count} swarm of bats through a line of enemies for {dmg} damage.'})
+    spell('sleep', {name = 'Sleep', code = 'AUsl', icon = 'BTNSleep', kind = 'nova', cd = 9.0, dmg = 20, radius = 300,
+        fx = FX.sleep, stun = 2.0, desc = 'Puts enemies within {radius} to sleep for {stun} sec and deals {dmg} damage.'})
+    spell('inferno', {name = 'Inferno', code = 'AUin', icon = 'BTNInfernal', kind = 'summon', cd = 30.0, count = 1,
+        countEvery = 4, units = {'ninf'}, dmg = 45, hp = 1200, impactDamage = 120, radius = 260, birth = FX.infernal, nearEnemy = true,
+        desc = 'Drops {count} infernal on the enemy for {impact} damage within {radius}. It fights for {dur} sec.'})
+    spell('frost_armor', {flat = true, name = 'Frost Armor', code = 'AUfu', icon = 'BTNFrostArmor', kind = 'aura', per = 2,
+        interval = 1.0, dmg = 10, radius = 230, fx = FX.frostArmor, slow = 0.25, slowDur = 1.5,
+        apply = function(s, v) s.armor = s.armor + v.amount; s.thorns = s.thorns + 6 * v.rank end,
+        desc = 'Frost chills enemies within {radius} for {dmg} damage every second. Grants {pct} armor; attackers take {rank6} frost damage.'})
+    spell('dark_ritual', {name = 'Dark Ritual', code = 'AUdr', icon = 'BTNDarkRitual', kind = 'heal', cd = 6.0, heal = 40,
+        threshold = 0.9, dmg = 35, radius = 260, fx = FX.darkRitual,
+        desc = 'When hurt or surrounded, sacrifices dark energy: {heal} health and {dmg} damage within {radius}.'})
+    spell('frost_bolt', {name = 'Frost Bolt', code = 'ACfb', icon = 'BTNFrostBolt', kind = 'bolt', cd = 1.6, dmg = 32, count = 1,
+        countEvery = 2, range = 900, missile = FX.frostBolt, speed = 1000, slow = 0.4, slowDur = 2.0, scale = 0.7,
+        desc = 'Fires {count} frost bolt for {dmg} damage, slowing by 40\037.'})
+    spell('frost_orbs', {name = 'Frost Orbs', code = 'AUfn', icon = 'BTNOrbOfFrost', kind = 'orbit', count = 2, countEvery = 2,
+        dmg = 20, orbitRadius = 210, hitRadius = 85, speed = 1.8, missile = FX.lichMissile, slow = 0.3,
+        desc = '{count} frost orbs circle the hero, hitting for {dmg} and chilling enemies.'})
+    spell('impale', {name = 'Impale', code = 'AUim', icon = 'BTNImpale', kind = 'line', cd = 4.0, dmg = 60, count = 1,
+        countEvery = 2, range = 800, width = 140, speed = 1200, stun = 0.8, trail = FX.impale, sound = 'ImpaleCast',
+        desc = 'Spikes erupt in a line for {dmg} damage, stunning for {stun} sec.'})
+    spell('spiked_carapace', {flat = true, name = 'Spiked Carapace', code = 'AUts', icon = 'BTNThornShield', kind = 'aura', per = 2,
+        interval = 1.0, dmg = 12, radius = 220, fx = FX.impale,
+        apply = function(s, v) s.armor = s.armor + v.amount; s.thorns = s.thorns + 10 * v.rank end,
+        desc = 'Spikes hit enemies within {radius} for {dmg} damage every second. Grants {pct} armor; attackers take {rank10} damage.'})
+    spell('carrion_beetles', {name = 'Carrion Beetles', code = 'AUcb', icon = 'BTNCarrionScarabs', kind = 'summon', cd = 12.0,
+        count = 2, countEvery = 1, units = {'ucs1', 'ucs1', 'ucs2', 'ucs2', 'ucs3'}, dmg = 14, hp = 220,
+        birth = FX.animateDead, desc = 'Spawns {count} carrion beetles for {dur} sec. Each bites for {dmg}.'})
+    spell('locust_swarm', {name = 'Locust Swarm', code = 'AUls', icon = 'BTNLocustSwarm', kind = 'orbit', count = 4,
+        countEvery = 1, dmg = 12, orbitRadius = 260, hitRadius = 70, speed = 2.6, missile = FX.cryptFiend, scale = 0.6,
+        leech = 0.2, desc = '{count} locusts swirl around the hero for {dmg} damage, bringing back 20\037 as health.'})
+
+    -- Night Elf
+    spell('mana_burn', {name = 'Mana Burn', code = 'AEmb', icon = 'BTNManaBurn', kind = 'bolt', cd = 1.8, dmg = 40, count = 1,
+        countEvery = 2, range = 800, missile = FX.arcane, speed = 1200, impact = FX.manaBurn,
+        desc = 'Burns {count} enemy for {dmg} damage.'})
+    spell('metamorphosis', {name = 'Metamorphosis', code = 'AEme', icon = 'BTNMetamorphosis', kind = 'buff', cd = 35.0,
+        dur = 10, per = 0.1, basePct = 0.25, trigger = 'enemies', fx = FX.avatar, scale = 1.3, dmg = 70, radius = 300,
+        burstFx = FX.immolationHit,
+        apply = function(s, v) s.damage = s.damage + v.bonus; s.maxHp = s.maxHp + 200; s.range = s.range + 350 end,
+        desc = 'Erupts into a demon for {dmg} damage within {radius}, then has +{pct2}\037 damage, +200 health and ranged attacks for {dur} sec.'})
+    spell('glaive_toss', {name = 'Glaive Toss', code = 'AEbl', icon = 'BTNUpgradeMoonGlaive', kind = 'bolt', cd = 2.2, dmg = 34,
+        count = 1, countEvery = 3, range = 850, missile = FX.glaive, speed = 1100, bounce = 3,
+        desc = 'Throws {count} glaive for {dmg} damage that bounces to 3 more enemies.'})
+    spell('fan_of_knives', {name = 'Fan of Knives', code = 'AEfk', icon = 'BTNFanOfKnives', kind = 'nova', cd = 3.0, dmg = 36,
+        radius = 300, fx = FX.fanOfKnives, desc = 'Throws knives in every direction for {dmg} damage within {radius}.'})
+    spell('entangling_roots', {name = 'Entangling Roots', code = 'AEer', icon = 'BTNEntanglingRoots', kind = 'bolt', cd = 3.0,
+        dmg = 30, count = 2, countEvery = 2, range = 800, instant = true, impact = FX.entangle, stun = 1.5, dot = 10, dotDur = 3,
+        desc = 'Roots the {count} nearest enemies for {stun} sec, dealing {dmg} plus {dot} per second.'})
+    spell('force_of_nature', {name = 'Force of Nature', code = 'AEfn', icon = 'BTNEnt', kind = 'summon', cd = 16.0, 
+        count = 2, countEvery = 1, units = {'efon'}, dmg = 20, hp = 350, birth = FX.tranquility,
+        desc = 'Awakens {count} treants for {dur} sec. Each strikes for {dmg}.'})
+    spell('thorns_aura', {flat = true, name = 'Thorns Aura', code = 'AEah', icon = 'BTNThorns', kind = 'aura', per = 14,
+        interval = 1.0, dmg = 12, radius = 240, fx = FX.entangle,
+        apply = function(s, v) s.thorns = s.thorns + v.amount end,
+        desc = 'Thorns lash enemies within {radius} for {dmg} damage every second. Attackers take {pct} damage.'})
+    spell('tranquility', {name = 'Tranquility', code = 'AEtq', icon = 'BTNTranquility', kind = 'heal', cd = 14.0, heal = 140,
+        threshold = 0.6, dmg = 45, radius = 340, fx = FX.tranquility,
+        desc = 'When hurt or surrounded, calls down rain: {heal} health and {dmg} damage to enemies within {radius}.'})
+    spell('starfall', {name = 'Starfall', code = 'AEsf', icon = 'BTNStarfall', kind = 'zone', cd = 9.0, dmg = 30, radius = 520,
+        onHero = true, waves = 8, interval = 0.4, strikes = true, count = 4, countEvery = 1, fx = FX.starfall,
+        desc = 'Stars fall around the hero: {waves} waves, each striking {count} enemies within {radius} for {dmg} damage.'})
+    spell('tornado', {name = 'Cyclone', code = 'ANto', icon = 'BTNTornado', kind = 'zone', cd = 10.0, dmg = 18, radius = 230,
+        range = 900, waves = 10, interval = 0.4, spread = 1, fx = FX.tornado, slow = 0.4,
+        desc = 'A cyclone tears through the densest pack: {waves} hits of {dmg} damage within {radius}.'})
+    spell('searing_arrows', {name = 'Searing Arrows', code = 'AHfa', icon = 'BTNSearingArrows', kind = 'bolt', cd = 1.6,
+        dmg = 28, count = 2, countEvery = 2, range = 900, missile = FX.searingArrow, speed = 1300,
+        desc = 'Looses {count} burning arrows at the nearest enemies for {dmg} damage each.'})
+    spell('scout', {name = 'Scout', code = 'AEst', icon = 'BTNScout', kind = 'bolt', cd = 3.5, dmg = 34, count = 2,
+        countEvery = 2, range = 1100, missile = FX.spirit, speed = 900, bounce = 1,
+        desc = 'An owl spirit dives on the {count} nearest enemies for {dmg} damage, then on one more.'})
+    spell('trueshot_aura', {name = 'Trueshot Aura', code = 'AEar', icon = 'BTNTrueShot', kind = 'aura', per = 0.07,
+        interval = 1.0, dmg = 12, radius = 260, fx = FX.searingArrow,
+        apply = function(s, v) s.damage = s.damage + v.amount end,
+        desc = 'Arrows of light hit enemies within {radius} for {dmg} damage every second. +{pct}\037 damage.'})
+    spell('moon_glaives', {name = 'Moon Glaives', code = 'AEsf', icon = 'BTNUpgradeMoonGlaive', kind = 'orbit', count = 2,
+        countEvery = 2, dmg = 24, orbitRadius = 240, hitRadius = 85, speed = 2.2, missile = FX.moonGlaive,
+        desc = '{count} glaives circle the hero, slicing enemies for {dmg} damage.'})
+    spell('barrage', {flat = true, name = 'Barrage', code = 'Aroc', icon = 'BTNScatterRockets', kind = 'passive', per = 1,
+        apply = function(s, v) s.multishot = s.multishot + v.rank end,
+        desc = 'Attacks and bolts fire {rank} extra projectile(s).'})
+    spell('frost_arrows', {flat = true, name = 'Frost Arrows', code = 'ANfa', icon = 'BTNColdArrowsOn', kind = 'passive', per = 6,
+        apply = function(s, v) s.attackBonus = s.attackBonus + v.amount; s.attackSlow = math.max(s.attackSlow, 0.3) end,
+        desc = 'Attacks deal +{pct} cold damage and slow by 30\037.'})
+    spell('vengeance', {name = 'Spirit of Vengeance', code = 'AEsv', icon = 'BTNSpiritOfVengeance', kind = 'summon', cd = 18.0,
+        count = 2, countEvery = 1, units = {'espv'}, dmg = 24, hp = 400, birth = FX.blink,
+        desc = 'Calls {count} spirits of vengeance for {dur} sec. Each strikes for {dmg}.'})
+    spell('blink_strike', {name = 'Blink Strike', code = 'AEbl', icon = 'BTNBlink', kind = 'nova', cd = 4.0, dmg = 55,
+        radius = 200, range = 700, atTarget = true, fx = FX.blink,
+        desc = 'Blinks into the nearest enemy, dealing {dmg} damage within {radius}.'})
+
+    -- Tavern
+    spell('crushing_wave', {name = 'Crushing Wave', code = 'ANcw', icon = 'BTNCrushingWave', kind = 'line', cd = 3.6, dmg = 50,
+        count = 1, countEvery = 2, range = 900, width = 150, speed = 950, missile = FX.crushingWave,
+        desc = 'Sends {count} wave crashing through a line of enemies for {dmg} damage.'})
+    spell('black_arrow', {name = 'Black Arrow', code = 'ANba', icon = 'BTNTheBlackArrow', kind = 'bolt', cd = 1.5, dmg = 30,
+        count = 1, countEvery = 2, range = 900, missile = FX.blackArrow, speed = 1300, dot = 12, dotDur = 3,
+        desc = 'Shoots {count} cursed arrow for {dmg} damage plus {dot} per second for 3 sec.'})
+    spell('life_drain', {name = 'Life Drain', code = 'ANdr', icon = 'BTNLifeDrain', kind = 'chain', cd = 2.4, dmg = 36,
+        count = 1, countEvery = 2, range = 650, fork = true, lightning = 'DRAL', leech = 0.5, impact = FX.vampiric,
+        desc = 'Drains {count} enemy for {dmg} damage and heals for half of it.'})
+    spell('charm', {name = 'Charm', code = 'ANch', icon = 'BTNCharm', kind = 'bolt', cd = 7.0, dmg = 95, count = 1,
+        range = 900, instant = true, prefersBoss = true, impact = FX.hex, splash = 200,
+        desc = 'Charms the strongest enemy in reach: it turns on its pack and burns out for {dmg} damage, half of it to those around.'})
+    spell('silence', {name = 'Silence', code = 'ANsi', icon = 'BTNSilence', kind = 'nova', cd = 8.0, dmg = 26, radius = 300,
+        range = 800, atTarget = true, fx = FX.silence, slow = 0.6, slowDur = 3.0,
+        desc = 'Silences the nearest pack: {dmg} damage within {radius} and a 60\037 slow.'})
+    spell('summon_bear', {name = 'Summon Bear', code = 'ANsg', icon = 'BTNGrizzlyBear', kind = 'summon', cd = 20.0, 
+        count = 1, countEvery = 3, units = {'ngz1', 'ngz1', 'ngz2', 'ngz2', 'ngz3'}, dmg = 40, hp = 900, birth = FX.teleport,
+        desc = 'Calls {count} bear for {dur} sec. It mauls for {dmg}.'})
+    spell('summon_quilbeast', {name = 'Summon Quilbeast', code = 'ANsq', icon = 'BTNQuillBeast', kind = 'summon', cd = 12.0,
+        count = 1, countEvery = 2, units = {'nqb1', 'nqb1', 'nqb2', 'nqb2', 'nqb3'}, dmg = 24, hp = 350, birth = FX.teleport,
+        desc = 'Calls {count} quilbeast for {dur} sec. It strikes for {dmg}.'})
+    spell('summon_hawk', {name = 'Summon Hawk', code = 'ANsw', icon = 'BTNWarEagle', kind = 'bolt', cd = 2.6, dmg = 30, count = 2,
+        countEvery = 2, range = 1000, missile = FX.spirit, speed = 1200, scale = 0.9,
+        desc = 'A war hawk dives on the {count} nearest enemies for {dmg} damage each.'})
+    spell('breath_of_fire', {name = 'Breath of Fire', code = 'ANbf', icon = 'BTNBreathOfFire', kind = 'line', cd = 3.0, dmg = 46,
+        count = 1, countEvery = 2, range = 700, width = 180, speed = 900, missile = FX.breathOfFire, dot = 10, dotDur = 3,
+        desc = 'Breathes {count} cone of fire for {dmg} damage that keeps burning for {dot} per second.'})
+    spell('drunken_haze', {name = 'Drunken Haze', code = 'ANdh', icon = 'BTNStrongDrink', kind = 'nova', cd = 5.0, dmg = 26,
+        radius = 260, range = 750, atTarget = true, fx = FX.drunkenHaze, slow = 0.55, slowDur = 4.0,
+        desc = 'Douses the nearest pack in brew: {dmg} damage within {radius} and a 55\037 slow.'})
+    spell('drunken_brawler', {name = 'Drunken Brawler', code = 'ANdb', icon = 'BTNDrunkenDodge', kind = 'passive', per = 0.035,
+        apply = function(s, v) s.dodge = s.dodge + v.amount; s.crit = s.crit + v.amount end,
+        desc = '+{pct}\037 dodge and +{pct}\037 critical strike chance.'})
+    spell('storm_earth_fire', {name = 'Storm, Earth and Fire', code = 'ANef', icon = 'BTNStormEarth&Fire', kind = 'summon',
+        cd = 35.0, count = 3, countEvery = 9, units = {'npn1', 'npn2', 'npn3'}, cycleUnits = true, dmg = 40, hp = 900,
+        birth = FX.teleport, desc = 'Splits into three elemental spirits for {dur} sec. Each strikes for {dmg}.'})
+    spell('soul_burn', {name = 'Soul Burn', code = 'ANso', icon = 'BTNSoulBurn', kind = 'bolt', cd = 2.0, dmg = 26, count = 1,
+        countEvery = 2, range = 850, missile = FX.fireball, speed = 1000, dot = 18, dotDur = 4, impact = FX.soulBurn,
+        desc = 'Sets {count} enemy\'s soul ablaze: {dmg} damage plus {dot} per second for 4 sec.'})
+    spell('lava_spawn', {name = 'Lava Spawn', code = 'ANlm', icon = 'BTNLavaSpawn', kind = 'summon', cd = 14.0, 
+        count = 2, countEvery = 1, units = {'nlv1', 'nlv1', 'nlv2', 'nlv2', 'nlv3'}, dmg = 22, hp = 300, birth = FX.incinerate,
+        desc = 'Spawns {count} lava spawn for {dur} sec. Each hits for {dmg}.'})
+    spell('volcano', {name = 'Volcano', code = 'ANvc', icon = 'BTNVolcano', kind = 'zone', cd = 12.0, dmg = 40, radius = 320,
+        range = 950, waves = 6, interval = 0.6, spread = 3, fx = FX.volcano, stun = 0.5,
+        desc = 'Erupts under the densest pack: {waves} waves of {dmg} damage within {radius}.'})
+    spell('cluster_rockets', {name = 'Cluster Rockets', code = 'ANcs', icon = 'BTNClusterRockets', kind = 'zone', cd = 3.5,
+        dmg = 34, radius = 230, range = 950, waves = 3, interval = 0.25, spread = 4, fx = FX.rocket,
+        desc = 'Showers the densest pack with rockets: {waves} volleys of {dmg} damage within {radius}.'})
+    spell('pocket_factory', {name = 'Pocket Factory', code = 'ANsy', icon = 'BTNPocketFactory', kind = 'summon', cd = 12.0,
+        count = 2, countEvery = 1, units = {'ncg1', 'ncg1', 'ncg2', 'ncg2', 'ncg3'}, dmg = 18, hp = 260, birth = FX.rocket,
+        desc = 'Deploys {count} clockwerk goblins for {dur} sec. Each hits for {dmg}.'})
+    spell('robo_goblin', {name = 'Robo-Goblin', code = 'ANrg', icon = 'BTNROBOGOBLIN', kind = 'buff', cd = 25.0, dur = 10,
+        per = 0.08, basePct = 0.15, trigger = 'enemies', fx = FX.explosion, scale = 1.2, dmg = 65, radius = 300,
+        burstFx = FX.explosion,
+        apply = function(s, v) s.armor = s.armor + 6; s.damage = s.damage + v.bonus end,
+        desc = 'Lands in a robot suit for {dmg} damage within {radius}, then has +6 armor and +{pct2}\037 damage for {dur} sec.'})
+    spell('engineering', {name = 'Engineering Upgrade', code = 'ANeg', icon = 'BTNEngineeringUpgrade', kind = 'passive', per = 0.04,
+        apply = function(s, v) s.cdr = s.cdr + v.amount; s.area = s.area + v.amount end,
+        desc = 'Spells recharge {pct}\037 faster and cover {pct}\037 more area.'})
+    spell('acid_bomb', {name = 'Acid Bomb', code = 'ANab', icon = 'BTNAcidBomb', kind = 'bolt', cd = 2.2, dmg = 36, count = 1,
+        countEvery = 2, range = 850, missile = FX.acidBomb, speed = 800, splash = 180, slow = 0.3, slowDur = 3.0,
+        desc = 'Lobs {count} acid bomb for {dmg} damage that splashes and slows.'})
+    spell('healing_spray', {name = 'Healing Spray', code = 'ANhs', icon = 'BTNHealingSpray', kind = 'heal', cd = 10.0, heal = 120,
+        threshold = 0.7, dmg = 30, radius = 280, fx = FX.healSpray,
+        desc = 'When hurt, sprays a tonic: {heal} health and {dmg} damage to enemies within {radius}.'})
+    spell('chemical_rage', {name = 'Chemical Rage', code = 'ANcr', icon = 'BTNChemicalRage', kind = 'buff', cd = 22.0, dur = 9,
+        per = 0.08, basePct = 0.3, trigger = 'enemies', fx = FX.bloodlust, scale = 1.25, dmg = 55, radius = 280,
+        burstFx = FX.acidBomb,
+        apply = function(s, v) s.attackSpeed = s.attackSpeed + v.bonus; s.move = s.move + 0.15 end,
+        desc = 'Smashes the potion for {dmg} damage within {radius}, then has +{pct2}\037 attack speed and +15\037 movement speed for {dur} sec.'})
+    spell('transmute', {name = 'Transmute', code = 'ANtm', icon = 'BTNTransmute', kind = 'bolt', cd = 6.0, dmg = 90, count = 1,
+        range = 850, instant = true, prefersBoss = true, impact = FX.transmute, per = 0.04,
+        apply = function(s, v) s.killGold = s.killGold + v.amount; s.gold = s.gold + v.amount * 2 end,
+        desc = 'Turns the strongest enemy in reach to gold for {dmg} damage. Kills have a {pct}\037 chance to drop gold; +{pct2b}\037 gold.'})
+    spell('doom', {name = 'Doom', code = 'ANdo', icon = 'BTNDoom', kind = 'bolt', cd = 8.0, dmg = 160, count = 1, countEvery = 3,
+        range = 900, instant = true, impact = FX.doom, prefersBoss = true,
+        desc = 'Dooms {count} enemy for {dmg} damage. Prefers bosses and elites.'})
+
+    -- The codex lists, in hero order, only the spells some hero's pool offers.
+    for _, hero in ipairs(HEROES) do
+        for _, key in ipairs(hero.pool) do
+            if SPELLS[key] and not SPELLS[key].listed then
+                SPELLS[key].listed = true
+                SPELL_ORDER[#SPELL_ORDER + 1] = key
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Blessings: generic stat cards any hero can draw. They take no spell slot.
+    ---------------------------------------------------------------------------
+    local BLESSINGS = {
+        {key = 'might', name = 'Might', code = 'ratc', icon = 'BTNClawsOfAttack', per = 0.10,
+            desc = '+{v}\037 damage', apply = function(s, x) s.damage = s.damage + x end},
+        {key = 'ferocity', name = 'Ferocity', code = 'gcel', icon = 'BTNGlove', per = 0.12,
+            desc = '+{v}\037 attack speed', apply = function(s, x) s.attackSpeed = s.attackSpeed + x end},
+        {key = 'haste', name = 'Haste', code = 'rwiz', icon = 'BTNSobiMask', per = 0.06,
+            desc = 'Spells recharge {v}\037 faster', apply = function(s, x) s.cdr = s.cdr + x end},
+        {key = 'reach', name = 'Reach', code = 'ciri', icon = 'BTNRobeOfTheMagi', per = 0.12,
+            desc = '+{v}\037 area of effect', apply = function(s, x) s.area = s.area + x end},
+        {key = 'swiftness', name = 'Swiftness', code = 'bspd', icon = 'BTNBootsOfSpeed', per = 0.07,
+            desc = '+{v}\037 movement speed', apply = function(s, x) s.move = s.move + x end},
+        {key = 'vigor', name = 'Vigor', code = 'prvt', icon = 'BTNPeriapt', per = 60, flat = true,
+            desc = '+{v} maximum health', apply = function(s, x) s.maxHp = s.maxHp + x end},
+        {key = 'regeneration', name = 'Regeneration', code = 'rlif', icon = 'BTNRingGreen', per = 1.2, flat = true,
+            desc = '+{v} health per second', apply = function(s, x) s.regen = s.regen + x end},
+        {key = 'fortitude', name = 'Fortitude', code = 'rde1', icon = 'BTNRingJadeFalcon', per = 2, flat = true,
+            desc = '+{v} armor', apply = function(s, x) s.armor = s.armor + x end},
+        {key = 'precision', name = 'Precision', code = 'hcun', icon = 'BTNHoodOfCunning', per = 0.05,
+            desc = '+{v}\037 critical strike chance', apply = function(s, x) s.crit = s.crit + x end},
+        {key = 'brutality', name = 'Brutality', code = 'rst1', icon = 'BTNGauntletsOfOgrePower', per = 0.25,
+            desc = '+{v}\037 critical strike damage', apply = function(s, x) s.critMult = s.critMult + x end},
+        {key = 'vampirism', name = 'Vampirism', code = 'vamp', icon = 'BTNVampiricPotion', per = 0.02,
+            desc = 'Heal for {v}\037 of damage dealt', apply = function(s, x) s.lifesteal = s.lifesteal + x end},
+        {key = 'magnetism', name = 'Magnetism', code = 'mcou', icon = 'BTNMedalionOfCourage', per = 0.30,
+            desc = '+{v}\037 pickup range', apply = function(s, x) s.pickup = s.pickup + x end},
+        {key = 'wisdom', name = 'Wisdom', code = 'tkno', icon = 'BTNTome', per = 0.10,
+            desc = '+{v}\037 experience', apply = function(s, x) s.xp = s.xp + x end},
+        {key = 'greed', name = 'Greed', code = 'pghe', icon = 'BTNChestOfGold', per = 0.15,
+            desc = '+{v}\037 gold', apply = function(s, x) s.gold = s.gold + x end},
+        {key = 'multishot', name = 'Multishot', code = 'afac', icon = 'BTNAlleriaFlute', per = 1, flat = true,
+            desc = '+{v} projectile on attacks and bolts', apply = function(s, x) s.multishot = s.multishot + math.floor(x + 0.01) end},
+        {key = 'fortune', name = 'Fortune', code = 'cnob', icon = 'BTNCirclet', per = 0.25,
+            desc = '+{v}\037 chance of rarer cards', apply = function(s, x) s.luck = s.luck + x end},
+        {key = 'persistence', name = 'Persistence', code = 'hval', icon = 'BTNHelmOfValor', per = 0.15,
+            desc = '+{v}\037 spell duration', apply = function(s, x) s.duration = s.duration + x end}
+    }
+    local BLESSING_BY_KEY = {}
+    for _, b in ipairs(BLESSINGS) do
+        BLESSING_BY_KEY[b.key] = b
+    end
+
+    ---------------------------------------------------------------------------
+    -- Zones. Each one re-themes the same arena: enemies, bosses, fog and time
+    -- of day. Winning a zone unlocks the next. Every boss drops gear.
+    ---------------------------------------------------------------------------
+    local ZONES = {
+        {name = 'Ashenvale', subtitle = 'The Long Night', tier = 1, power = 0.7, density = 0.8,
+            music = {'NightElf1', 'NightElf2', 'NightElf3', 'NightElfX1'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Ashenvale-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_ashenvale.tga',
+            fog = {0.10, 0.16, 0.22, 900, 4200}, time = 0.0,
+            desc = 'Night has fallen on the forest. Wolves run with the furbolgs and the satyrs of Felwood creep in from the north.',
+            enemies = {
+                {id = 'nwlt', hp = 40, dmg = 6, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nfrl', hp = 70, dmg = 8, xp = 1, from = 0, til = 7, w = 3},
+                {id = 'nsty', hp = 60, dmg = 8, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'nfrs', hp = 60, dmg = 9, xp = 2, from = 2, w = 2},
+                {id = 'nwlg', hp = 110, dmg = 11, xp = 2, from = 3, w = 3},
+                {id = 'nsat', hp = 90, dmg = 11, xp = 2, from = 4, w = 2},
+                {id = 'nfrb', hp = 140, dmg = 14, xp = 3, from = 5, w = 3},
+                {id = 'nsts', hp = 160, dmg = 15, xp = 3, from = 6, w = 2},
+                {id = 'nfre', hp = 180, dmg = 16, xp = 3, from = 7, w = 2},
+                {id = 'nwld', hp = 220, dmg = 18, xp = 3, from = 8, w = 3}
+            },
+            bosses = {
+                {t = 120, id = 'nfrg', name = 'Ursol the Champion', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'nwld', name = 'Goretooth', scale = 1.9, hp = 4200, dmg = 38},
+                {t = 360, id = 'nstl', name = 'Shadumbra Soulstealer', scale = 1.9, hp = 6500, dmg = 46},
+                {t = 480, id = 'nfra', name = 'Old Ursangous', scale = 2.0, hp = 9500, dmg = 55}
+            },
+            final = {id = 'nsth', name = 'Prince Xavius', scale = 2.3, hp = 26000, dmg = 70}},
+
+        {name = 'Westfall', subtitle = 'The Defias Uprising', tier = 2, power = 1.0, density = 0.9,
+            music = {'Human1', 'Human2', 'Human3', 'HumanX1'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Lordaeron-TopLeft.blp',
+            fog = {0.42, 0.34, 0.22, 1200, 5200}, time = 18.0,
+            desc = 'Kobolds pour out of the mines, murlocs crawl up from the coast and the Defias Brotherhood marches on the farms.',
+            enemies = {
+                {id = 'nkob', hp = 45, dmg = 6, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nmrl', hp = 50, dmg = 7, xp = 1, from = 0, til = 7, w = 3},
+                {id = 'ngno', hp = 60, dmg = 8, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'nkog', hp = 70, dmg = 9, xp = 2, from = 2, w = 2},
+                {id = 'nmrr', hp = 100, dmg = 11, xp = 2, from = 3, w = 3},
+                {id = 'nban', hp = 110, dmg = 12, xp = 2, from = 3, w = 3},
+                {id = 'ngnb', hp = 150, dmg = 14, xp = 3, from = 5, w = 2},
+                {id = 'nrog', hp = 160, dmg = 15, xp = 3, from = 6, w = 3},
+                {id = 'nenf', hp = 230, dmg = 18, xp = 3, from = 7, w = 2},
+                {id = 'nass', hp = 200, dmg = 20, xp = 3, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'ngnv', name = 'Hogger', scale = 1.9, hp = 2600, dmg = 30},
+                {t = 240, id = 'nmfs', name = 'Old Murk-Eye', scale = 2.0, hp = 4200, dmg = 38},
+                {t = 360, id = 'nogm', name = 'Rhahk\'Zor', scale = 1.7, hp = 6500, dmg = 46},
+                {t = 480, id = 'nenf', name = 'Mr. Smite', scale = 1.9, hp = 9500, dmg = 55}
+            },
+            final = {id = 'nbld', name = 'Edwin VanCleef', scale = 2.1, hp = 26000, dmg = 70}},
+
+        {name = 'The Barrens', subtitle = 'Razormane Stampede', tier = 3, power = 1.4,
+            music = {'Orc1', 'Orc2', 'Orc3', 'OrcX1'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Barrens-TopLeft.blp',
+            fog = {0.55, 0.40, 0.22, 1500, 6000}, time = 13.0,
+            desc = 'The quilboar of Razorfen ride with Kolkar centaurs, and harpies circle overhead looking for stragglers.',
+            enemies = {
+                {id = 'nrzs', hp = 55, dmg = 7, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nhar', hp = 50, dmg = 7, xp = 1, from = 0, til = 7, w = 3},
+                {id = 'ncer', hp = 70, dmg = 9, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'nrzb', hp = 110, dmg = 11, xp = 2, from = 2, w = 3},
+                {id = 'nhrr', hp = 90, dmg = 11, xp = 2, from = 3, w = 2},
+                {id = 'ncea', hp = 100, dmg = 12, xp = 2, from = 3, w = 2},
+                {id = 'ncen', hp = 160, dmg = 15, xp = 3, from = 5, w = 3},
+                {id = 'nrzm', hp = 150, dmg = 15, xp = 3, from = 6, w = 2},
+                {id = 'nhrw', hp = 170, dmg = 17, xp = 3, from = 7, w = 2},
+                {id = 'ncim', hp = 260, dmg = 20, xp = 3, from = 8, w = 3}
+            },
+            bosses = {
+                {t = 120, id = 'nrzg', name = 'Charlga Razorflank', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'nhrq', name = 'Sister Hatelash', scale = 1.9, hp = 4200, dmg = 38},
+                {t = 360, id = 'ncks', name = 'Kolkar Stormseer', scale = 1.8, hp = 6500, dmg = 46},
+                {t = 480, id = 'ncnk', name = 'Barak Kodobane', scale = 1.8, hp = 9500, dmg = 55}
+            },
+            final = {id = 'ncnk', name = 'Khan Hratha', scale = 2.4, hp = 26000, dmg = 70}},
+
+        {name = 'Plaguelands', subtitle = 'The Scourge Rises', tier = 4, power = 1.9,
+            music = {'Undead1', 'Undead2', 'Undead3', 'UndeadX1'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\LordaeronExpansion-TopLeft.blp',
+            fog = {0.20, 0.30, 0.12, 800, 3600}, time = 0.0,
+            desc = 'The dead walk the fields of Lordaeron. Ghouls lead the charge and abominations shamble behind.',
+            enemies = {
+                {id = 'nzom', hp = 60, dmg = 7, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'ugho', hp = 70, dmg = 8, xp = 1, from = 0, til = 8, w = 4},
+                {id = 'uske', hp = 60, dmg = 8, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'ucry', hp = 120, dmg = 12, xp = 2, from = 2, w = 3},
+                {id = 'ugar', hp = 90, dmg = 11, xp = 2, from = 3, w = 2},
+                {id = 'uban', hp = 100, dmg = 12, xp = 2, from = 4, w = 2},
+                {id = 'unec', hp = 110, dmg = 13, xp = 2, from = 4, w = 2},
+                {id = 'uabo', hp = 300, dmg = 19, xp = 3, from = 6, w = 3},
+                {id = 'nfgu', hp = 280, dmg = 21, xp = 3, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'uabo', name = 'Stitches', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'ucry', name = 'Anub\'Rekhan', scale = 2.0, hp = 4200, dmg = 38},
+                {t = 360, id = 'unec', name = 'Noth the Plaguebringer', scale = 2.0, hp = 6500, dmg = 46},
+                {t = 480, id = 'uabo', name = 'Patchwerk', scale = 2.4, hp = 9500, dmg = 55}
+            },
+            final = {id = 'ufro', name = 'Sapphiron', scale = 1.7, hp = 26000, dmg = 70}},
+
+        {name = 'Felwood', subtitle = 'The Burning Legion', tier = 5, power = 2.5,
+            music = {'Doom', 'Tension', 'DarkAgents', 'IllidansTheme'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\AshenvaleExpansion-TopLeft.blp',
+            fog = {0.28, 0.12, 0.32, 900, 4000}, time = 21.0,
+            desc = 'Fel fire burns the canopy. Voidwalkers and infernals answer the call of the satyr hellcallers.',
+            enemies = {
+                {id = 'nsty', hp = 70, dmg = 8, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nvdl', hp = 80, dmg = 9, xp = 1, from = 0, til = 8, w = 3},
+                {id = 'nsts', hp = 110, dmg = 12, xp = 2, from = 2, w = 3},
+                {id = 'nvdw', hp = 160, dmg = 14, xp = 2, from = 3, w = 3},
+                {id = 'nstl', hp = 170, dmg = 15, xp = 3, from = 4, w = 2},
+                {id = 'nfgu', hp = 260, dmg = 19, xp = 3, from = 5, w = 3},
+                {id = 'nsth', hp = 240, dmg = 20, xp = 3, from = 7, w = 2},
+                {id = 'ninf', hp = 420, dmg = 24, xp = 4, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nvdg', name = 'Lord Banehollow', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'nbal', name = 'Doomguard Commander', scale = 1.6, hp = 4200, dmg = 38},
+                {t = 360, id = 'nsth', name = 'Shadow Lord Xavian', scale = 2.0, hp = 6500, dmg = 46},
+                {t = 480, id = 'ninf', name = 'Infernal Behemoth', scale = 1.6, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Nplh', name = 'Mannoroth', scale = 1.8, hp = 26000, dmg = 70}},
+
+        {name = 'Northrend', subtitle = 'The Frozen Throne', tier = 6, power = 3.3,
+            music = {'LichKingTheme', 'ArthasTheme', 'SadMystery', 'UndeadX1'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Northrend-TopLeft.blp',
+            fog = {0.55, 0.66, 0.82, 1000, 4600}, time = 0.0,
+            desc = 'Ice trolls, Nerubians and the Scourge guard the road to Icecrown. The Lich King is waiting.',
+            enemies = {
+                {id = 'nitr', hp = 80, dmg = 9, xp = 1, from = 0, til = 7, w = 4},
+                {id = 'ugho', hp = 80, dmg = 9, xp = 1, from = 0, til = 6, w = 3},
+                {id = 'nnwa', hp = 120, dmg = 12, xp = 2, from = 1, w = 3},
+                {id = 'nitp', hp = 110, dmg = 12, xp = 2, from = 2, w = 2},
+                {id = 'nnwl', hp = 130, dmg = 13, xp = 2, from = 3, w = 2},
+                {id = 'nits', hp = 200, dmg = 17, xp = 3, from = 4, w = 3},
+                {id = 'nnwr', hp = 180, dmg = 17, xp = 3, from = 5, w = 2},
+                {id = 'uabo', hp = 340, dmg = 21, xp = 3, from = 6, w = 2},
+                {id = 'nnws', hp = 360, dmg = 24, xp = 4, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nitw', name = 'Warlord Zol\'Maz', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'nnws', name = 'Krik\'thir the Gatewatcher', scale = 1.8, hp = 4200, dmg = 38},
+                {t = 360, id = 'Udea', name = 'Baron Rivendare', scale = 1.6, hp = 6500, dmg = 46},
+                {t = 480, id = 'ufro', name = 'Frost Wyrm', scale = 1.5, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Ulic', name = 'Kel\'Thuzad', scale = 1.9, hp = 26000, dmg = 70}}
+    }
+
+    for _, zone in ipairs(ZONES) do
+        for index, e in ipairs(zone.enemies) do
+            e.index = index
+        end
+        zone.final.t = CFG.RUN_LENGTH
+    end
+
+    ---------------------------------------------------------------------------
+    -- Items. Every boss drops one Warcraft III item. Its item level comes from
+    -- the zone tier and the difficulty, and gold upgrades it along a six-step
+    -- track. Heroes carry six items, the classic inventory, chosen in the
+    -- armory; every hero carries the same six.
+    ---------------------------------------------------------------------------
+    local INVENTORY_SIZE = 6
+
+    -- What an item gives, per item level 100 (higher levels scale it up).
+    local ITEM_STATS = {
+        damage = {per = 0.05, desc = '+{v}\037 damage', apply = function(s, x) s.damage = s.damage + x end},
+        armor = {per = 1.5, flat = true, desc = '+{v} armor', apply = function(s, x) s.armor = s.armor + x end},
+        move = {per = 0.03, desc = '+{v}\037 movement speed', apply = function(s, x) s.move = s.move + x end},
+        health = {per = 25, flat = true, desc = '+{v} maximum health', apply = function(s, x) s.maxHp = s.maxHp + x end},
+        regen = {per = 0.5, flat = true, desc = '+{v} health per second', apply = function(s, x) s.regen = s.regen + x end},
+        attackSpeed = {per = 0.04, desc = '+{v}\037 attack speed', apply = function(s, x) s.attackSpeed = s.attackSpeed + x end},
+        crit = {per = 0.02, desc = '+{v}\037 critical strike chance', apply = function(s, x) s.crit = s.crit + x end},
+        cdr = {per = 0.025, desc = 'Spells recharge {v}\037 faster', apply = function(s, x) s.cdr = s.cdr + x end},
+        pickup = {per = 0.1, desc = '+{v}\037 pickup range', apply = function(s, x) s.pickup = s.pickup + x end},
+        xp = {per = 0.05, desc = '+{v}\037 experience', apply = function(s, x) s.xp = s.xp + x end},
+        area = {per = 0.03, desc = '+{v}\037 area of effect', apply = function(s, x) s.area = s.area + x end},
+        lifesteal = {per = 0.01, desc = 'Heal for {v}\037 of damage dealt', apply = function(s, x) s.lifesteal = s.lifesteal + x end},
+        dr = {per = 0.02, desc = '+{v}\037 damage reduction', apply = function(s, x) s.dr = s.dr + x end},
+        gold = {per = 0.08, desc = '+{v}\037 gold', apply = function(s, x) s.gold = s.gold + x end}
+    }
+
+    -- Per zone, the items of its four bosses and its final boss, in order:
+    -- rawcode (its icon comes from the game data), name, stat.
+    local ZONE_ITEMS = {
+        {{'ratc', 'Claws of Attack', 'damage'}, {'rde1', 'Ring of Protection', 'armor'}, {'bspd', 'Boots of Speed', 'move'},
+            {'prvt', 'Periapt of Vitality', 'health'}, {'rlif', 'Ring of Regeneration', 'regen'}},
+        {{'gcel', 'Gloves of Haste', 'attackSpeed'}, {'hcun', 'Hood of Cunning', 'crit'}, {'rwiz', 'Sobi Mask', 'cdr'},
+            {'mcou', 'Medallion of Courage', 'pickup'}, {'cnob', 'Circlet of Nobility', 'xp'}},
+        {{'clfm', 'Cloak of Flames', 'area'}, {'modt', 'Mask of Death', 'lifesteal'}, {'brac', 'Runed Bracers', 'dr'},
+            {'bgst', 'Belt of Giant Strength', 'health'}, {'lgdh', 'Legion Doom-Horn', 'move'}},
+        {{'ciri', 'Robe of the Magi', 'cdr'}, {'ofro', 'Orb of Frost', 'damage'}, {'ward', 'Warsong Battle Drums', 'attackSpeed'},
+            {'ajen', 'Ancient Janggo of Endurance', 'regen'}, {'evtl', 'Talisman of Evasion', 'dr'}},
+        {{'ofir', 'Orb of Fire', 'area'}, {'odef', 'Orb of Darkness', 'damage'}, {'kpin', 'Khadgar\'s Pipe of Insight', 'cdr'},
+            {'hval', 'Helm of Valor', 'armor'}, {'rhth', 'Khadgar\'s Gem of Health', 'health'}},
+        {{'frgd', 'Frostguard', 'armor'}, {'ckng', 'Crown of Kings', 'damage'}, {'desc', 'Kelen\'s Dagger of Escape', 'move'},
+            {'ssan', 'Staff of Sanctuary', 'regen'}, {'ankh', 'Ankh of Reincarnation', 'gold'}}
+    }
+    local GEAR_UPGRADES = 6     -- steps on the upgrade track
+    local GEAR_STEP_ILVL = 3    -- item levels per step
+
+    local GEAR = {}
+    for zi, zone in ipairs(ZONES) do
+        local bosses = {zone.bosses[1], zone.bosses[2], zone.bosses[3], zone.bosses[4], zone.final}
+        for bi, boss in ipairs(bosses) do
+            local entry = ZONE_ITEMS[zi][bi]
+            local item = {id = 'z' .. zi .. 'b' .. bi, index = #GEAR + 1, zone = zi, boss = boss, code = entry[1],
+                name = entry[2], stat = ITEM_STATS[entry[3]], baseIlvl = 100 + 10 * (zone.tier - 1)}
+            boss.item = item
+            GEAR[#GEAR + 1] = item
+        end
+    end
+
+    -- Stat multiplier for an item level: 100 is the base, every 40 adds 100 percent.
+    local function gearScale(ilvl)
+        return 1 + (ilvl - 100) / 40
+    end
+
+    local function gearLevel(p, item)
+        local base = p.gear[item.id]
+        if base == nil then
+            return nil
+        end
+        return base + GEAR_STEP_ILVL * (p.upg[item.id] or 0)
+    end
+
+    -- The carried items, by inventory slot 1..6 (p.inv: slot -> GEAR index).
+    local function gearEquipped(p)
+        local worn = {}
+        for slot = 1, INVENTORY_SIZE do
+            local item = GEAR[p.inv[tostring(slot)] or 0]
+            if item and p.gear[item.id] then
+                worn[slot] = item
+            end
+        end
+        return worn
+    end
+
+    local function gearSlotOf(p, item)
+        for slot, worn in pairs(gearEquipped(p)) do
+            if worn == item then
+                return slot
+            end
+        end
+        return nil
+    end
+
+    -- Average over the six slots; an empty slot counts as zero.
+    local function gearAverage(p)
+        local total = 0
+        for _, item in pairs(gearEquipped(p)) do
+            total = total + gearLevel(p, item)
+        end
+        return math.floor(total / INVENTORY_SIZE)
+    end
+
+    local function gearUpgradeCost(p, item)
+        local step = (p.upg[item.id] or 0) + 1
+        return math.floor(35 * step * (1 + 0.5 * (ZONES[item.zone].tier - 1)) + 0.5)
+    end
+
+    -- Item quality colour by item level.
+    local function gearHex(ilvl)
+        if ilvl >= 170 then
+            return 'ff8000'
+        elseif ilvl >= 145 then
+            return 'a335ee'
+        elseif ilvl >= 125 then
+            return '0070dd'
+        elseif ilvl >= 110 then
+            return '1eff00'
+        end
+        return 'e6e6e6'
+    end
+
+    -- Mythic+ rating: 100 plus 15 per level of each zone's best timed keystone.
+    local function keystoneRating(p)
+        local rating = 0
+        for zi = 1, #ZONES do
+            local best = p.keyBest[tostring(zi)] or 0
+            if best > 0 then
+                rating = rating + 100 + 15 * best
+            end
+        end
+        return rating
+    end
+
+    local function maxValue(map)
+        local best = 0
+        for _, value in pairs(map) do
+            best = math.max(best, value)
+        end
+        return best
+    end
+
+    ---------------------------------------------------------------------------
+    -- Meta progression
+    ---------------------------------------------------------------------------
+    -- Talents are bought with gold earned in runs. They apply to every hero.
+    local TALENTS = {
+        {key = 'might', name = 'Might', code = 'ratc', icon = 'BTNClawsOfAttack', per = 0.04, max = 5, desc = '+{v}\037 damage',
+            apply = function(s, x) s.damage = s.damage + x end},
+        {key = 'vitality', name = 'Vitality', code = 'prvt', icon = 'BTNPeriapt', per = 30, flat = true, max = 5, desc = '+{v} maximum health',
+            apply = function(s, x) s.maxHp = s.maxHp + x end},
+        {key = 'swiftness', name = 'Swiftness', code = 'bspd', icon = 'BTNBootsOfSpeed', per = 0.03, max = 5, desc = '+{v}\037 movement speed',
+            apply = function(s, x) s.move = s.move + x end},
+        {key = 'haste', name = 'Haste', code = 'rwiz', icon = 'BTNSobiMask', per = 0.03, max = 5, desc = 'Spells recharge {v}\037 faster',
+            apply = function(s, x) s.cdr = s.cdr + x end},
+        {key = 'wisdom', name = 'Wisdom', code = 'tkno', icon = 'BTNTome', per = 0.06, max = 5, desc = '+{v}\037 experience',
+            apply = function(s, x) s.xp = s.xp + x end},
+        {key = 'greed', name = 'Greed', code = 'pghe', icon = 'BTNChestOfGold', per = 0.10, max = 5, desc = '+{v}\037 gold',
+            apply = function(s, x) s.gold = s.gold + x end},
+        {key = 'magnetism', name = 'Magnetism', code = 'mcou', icon = 'BTNMedalionOfCourage', per = 0.15, max = 5, desc = '+{v}\037 pickup range',
+            apply = function(s, x) s.pickup = s.pickup + x end},
+        {key = 'precision', name = 'Precision', code = 'hcun', icon = 'BTNHoodOfCunning', per = 0.02, max = 5, desc = '+{v}\037 critical strike',
+            apply = function(s, x) s.crit = s.crit + x end},
+        {key = 'regeneration', name = 'Regeneration', code = 'rlif', icon = 'BTNRingGreen', per = 0.3, flat = true, max = 5, desc = '+{v} health per second',
+            apply = function(s, x) s.regen = s.regen + x end},
+        {key = 'armor', name = 'Toughness', code = 'rde1', icon = 'BTNRingJadeFalcon', per = 1, flat = true, max = 5, desc = '+{v} armor',
+            apply = function(s, x) s.armor = s.armor + x end}
+    }
+    local function talentCost(rank)
+        return math.floor(60 * rank ^ 1.6 + 0.5)
+    end
+
+    -- Perks are bought with achievement points.
+    local PERKS = {
+        {key = 'rerolls', name = 'Second Thoughts', code = 'AOre', icon = 'BTNReincarnation', costs = {10, 15, 20},
+            desc = '+1 free reroll every run per rank.'},
+        {key = 'banish', name = 'Banish', code = 'AHbn', icon = 'BTNBanish', costs = {15, 20, 25},
+            desc = '+1 banish every run per rank. A banished card never comes back that run.'},
+        {key = 'skip', name = 'Skip', code = 'pghe', icon = 'BTNChestOfGold', costs = {10},
+            desc = 'Pass on any hand and take gold instead.'},
+        {key = 'opening', name = 'Opening Hand', code = 'tkno', icon = 'BTNTome', costs = {20},
+            desc = 'Your first level-up of every run deals four cards.'},
+        {key = 'keen', name = 'Keen Eye', code = 'AEst', icon = 'BTNScout', costs = {15, 25},
+            desc = 'Bosses are 10\037 more likely to drop gear per rank.'},
+        {key = 'lucky', name = 'Lucky Star', code = 'cnob', icon = 'BTNCirclet', costs = {15, 25, 35},
+            desc = 'Rarer cards show up more often per rank.'},
+        {key = 'wide', name = 'Wide Hand', code = 'AEbl', icon = 'BTNBlink', costs = {60},
+            desc = 'Every hand deals four cards.'},
+        {key = 'secondwind', name = 'Second Wind', code = 'AHre', icon = 'BTNResurrection', costs = {40},
+            desc = 'Return to life once per run at half health.'}
+    }
+    local PERK_BY_KEY = {}
+    for _, perk in ipairs(PERKS) do
+        PERK_BY_KEY[perk.key] = perk
+    end
+
+    -- Achievements: progress(profile) returns current, goal.
+    local ACHIEVEMENTS = {}
+    local function achievement(key, name, desc, code, icon, points, progress)
+        ACHIEVEMENTS[#ACHIEVEMENTS + 1] = {key = key, name = name, desc = desc, code = code, icon = icon,
+            points = points, progress = progress}
+    end
+    local function countKeys(map)
+        local n = 0
+        for _ in pairs(map) do
+            n = n + 1
+        end
+        return n
+    end
+    achievement('first_blood', 'First Blood', 'Slay your first enemy.', 'ratc', 'BTNClawsOfAttack', 5,
+        function(p) return p.kills, 1 end)
+    achievement('slayer', 'Slayer', 'Slay 1,000 enemies.', 'AOcr', 'BTNCriticalStrike', 10,
+        function(p) return p.kills, 1000 end)
+    achievement('exterminator', 'Exterminator', 'Slay 10,000 enemies.', 'AOww', 'BTNWhirlwind', 20,
+        function(p) return p.kills, 10000 end)
+    achievement('annihilator', 'Annihilator', 'Slay 50,000 enemies.', 'AUdd', 'BTNDeathAndDecay', 40,
+        function(p) return p.kills, 50000 end)
+    achievement('survivor', 'Survivor', 'Win a run.', 'AHds', 'BTNDivineIntervention', 10,
+        function(p) return p.wins, 1 end)
+    for zi, zone in ipairs(ZONES) do
+        achievement('zone' .. zi, zone.name, 'Defeat ' .. zone.final.name .. ' in ' .. zone.name .. '.', 'AHmt', 'BTNMassTeleport',
+            5 + zi * 5, function(p) return p.zoneWins[tostring(zi)] or 0, 1 end)
+    end
+    achievement('boss_hunter', 'Boss Hunter', 'Slay 25 bosses.', 'AHtb', 'BTNStormBolt', 15,
+        function(p) return p.bosses, 25 end)
+    achievement('giant_slayer', 'Giant Slayer', 'Slay 100 bosses.', 'AHav', 'BTNAvatar', 30,
+        function(p) return p.bosses, 100 end)
+    achievement('collector', 'Collector', 'Loot 10 pieces of gear.', 'hval', 'BTNHelmOfValor', 15,
+        function(p) return countKeys(p.gear), 10 end)
+    achievement('curator', 'Curator', 'Loot every piece of gear.', 'Rhme', 'BTNSteelMelee', 50,
+        function(p) return countKeys(p.gear), #GEAR end)
+    achievement('artisan', 'Artisan', 'Upgrade a piece of gear to the end of its track.', 'brac', 'BTNRunedBracers', 15,
+        function(p) return maxValue(p.upg), GEAR_UPGRADES end)
+    achievement('well_geared', 'Well Geared', 'Reach an average equipped item level of 130.', 'ciri', 'BTNRobeOfTheMagi', 25,
+        function(p) return gearAverage(p), 130 end)
+    achievement('scholar', 'Scholar', 'Discover 40 cards in the codex.', 'tkno', 'BTNTome', 15,
+        function(p) return countKeys(p.codex), 40 end)
+    achievement('loremaster', 'Loremaster', 'Discover 100 cards in the codex.', 'AEst', 'BTNScout', 30,
+        function(p) return countKeys(p.codex), 100 end)
+    achievement('champion', 'Champion of Azeroth', 'Win with 5 different heroes.', 'AHad', 'BTNDevotion', 30,
+        function(p) return countKeys(p.heroWins), 5 end)
+    for fi, faction in ipairs(FACTIONS) do
+        achievement('faction' .. fi, 'For the ' .. faction.key .. '!', 'Win a run with a ' .. faction.key .. ' hero.',
+            'AOae', 'BTNCommand', 10, function(p) return p.factionWins[tostring(fi)] or 0, 1 end)
+    end
+    achievement('ascendant', 'Ascendant', 'Reach level 30 in a single run.', 'AHab', 'BTNBrilliance', 15,
+        function(p) return p.bestLevel, 30 end)
+    achievement('veteran', 'Veteran', 'Play 25 runs.', 'AOsh', 'BTNShockWave', 10,
+        function(p) return p.runs, 25 end)
+    achievement('hoarder', 'Hoarder', 'Earn 5,000 gold in total.', 'pghe', 'BTNChestOfGold', 15,
+        function(p) return p.goldTotal, 5000 end)
+    achievement('heroic', 'Heroic', 'Win a run on Heroic difficulty.', 'AOvd', 'BTNBigBadVoodooSpell', 20,
+        function(p) return maxValue(p.zoneDiff) >= 2 and 1 or 0, 1 end)
+    achievement('mythic', 'Mythic', 'Win a run on Mythic difficulty.', 'AUin', 'BTNInfernal', 30,
+        function(p) return maxValue(p.zoneDiff) >= 3 and 1 or 0, 1 end)
+    achievement('keystone_initiate', 'Keystone Initiate', 'Time a Mythic+ keystone.', 'AHmt', 'BTNMassTeleport', 20,
+        function(p) return maxValue(p.keyBest) >= 2 and 1 or 0, 1 end)
+    achievement('keystone_challenger', 'Keystone Challenger', 'Time a +10 keystone.', 'AHav', 'BTNAvatar', 35,
+        function(p) return maxValue(p.keyBest), 10 end)
+    achievement('keystone_master', 'Keystone Master', 'Time a +15 keystone.', 'AUin', 'BTNInfernal', 50,
+        function(p) return maxValue(p.keyBest), 15 end)
+    achievement('keystone_hero', 'Keystone Hero', 'Reach a Mythic+ rating of 1,500.', 'AOvd', 'BTNBigBadVoodooSpell', 60,
+        function(p) return keystoneRating(p), 1500 end)
+
+    ---------------------------------------------------------------------------
+    -- Utilities
+    ---------------------------------------------------------------------------
+    local U = {iconCache = {}}
+
+    function U.col(hex, s)
+        return '|cff' .. hex .. s .. '|r'
+    end
+
+    function U.strip(s)
+        return (s:gsub('|c\037x\037x\037x\037x\037x\037x\037x\037x', ''):gsub('|r', ''))
+    end
+
+    function U.clamp(x, low, high)
+        if x < low then
+            return low
+        elseif x > high then
+            return high
+        end
+        return x
+    end
+
+    function U.num(x)
+        if x >= 100 or math.abs(x - math.floor(x + 0.5)) < 0.05 then
+            return tostring(math.floor(x + 0.5))
+        end
+        return string.format('\037.1f', x)
+    end
+
+    function U.big(x)
+        local s = tostring(math.floor(x + 0.5))
+        local out = s:reverse():gsub('(\037d\037d\037d)', '\0371,'):reverse()
+        return (out:gsub('^,', ''))
+    end
+
+    function U.time(seconds)
+        seconds = math.max(0, math.floor(seconds))
+        return string.format('\03702d:\03702d', seconds // 60, math.fmod(seconds, 60))
+    end
+
+    -- Real icon path of an ability, unit or item rawcode, read from the game
+    -- data. Falls back to a CommandButtons icon name when the lookup fails.
+    function U.icon(code, fallback)
+        local cacheKey = (code or '') .. '|' .. (fallback or '')
+        local cached = U.iconCache[cacheKey]
+        if cached then
+            return cached
+        end
+        local path = nil
+        if code and code ~= '' then
+            local ok, result = pcall(BlzGetAbilityIcon, FourCC(code))
+            -- Upgrades list one icon per level ("A.blp,B.blp,C.blp"): keep the first.
+            if ok and type(result) == 'string' then
+                result = result:match('^[^,]*')
+            end
+            if ok and type(result) == 'string' and result ~= '' and not result:find('BTNTemp') then
+                path = result
+            end
+        end
+        if path == nil then
+            path = 'ReplaceableTextures\\CommandButtons\\' .. (fallback or 'BTNSelectHeroOn') .. '.blp'
+        end
+        U.iconCache[cacheKey] = path
+        return path
+    end
+
+    -- An item's icon, from its rawcode's art in the game data.
+    local function gearIcon(item)
+        return U.icon(item.code, 'BTNSelectHeroOn')
+    end
+
+    function U.heroIcon(hero)
+        return U.icon(hero.id, hero.icon)
+    end
+
+    function U.spellIcon(def)
+        return U.icon(def.code, def.icon)
+    end
+
+    function U.factionOf(hero)
+        for index, faction in ipairs(FACTIONS) do
+            if faction.key == hero.faction then
+                return faction, index
+            end
+        end
+        return FACTIONS[1], 1
+    end
+
+    ---------------------------------------------------------------------------
+    -- File IO (single player). Writes a Preload file that, when read back with
+    -- Preloader, stores its payload in an ability tooltip.
+    ---------------------------------------------------------------------------
+    local FileIO = {}
+    do
+        local RAW_PREFIX = ']]i([['
+        local RAW_SUFFIX = ']])--[['
+        local RAW_SIZE = 200 - #RAW_PREFIX - #RAW_SUFFIX
+        local EMPTY = '!@#$, empty data'
+
+        function FileIO.save(path, data)
+            local ability = FourCC('ANdc')
+            PreloadGenClear()
+            Preload('")\nendfunction\n//!beginusercode\nlocal p={} local i=function(s) table.insert(p,s) end--[[')
+            for index = 1, #data, RAW_SIZE do
+                Preload(RAW_PREFIX .. data:sub(index, index + RAW_SIZE - 1) .. RAW_SUFFIX)
+            end
+            Preload(']]BlzSetAbilityTooltip(' .. ability .. ', table.concat(p), 0)\n//!endusercode\nfunction a takes nothing returns nothing\n //')
+            PreloadGenEnd(path)
+        end
+
+        function FileIO.load(path)
+            local ability = FourCC('ANdc')
+            local original = BlzGetAbilityTooltip(ability, 0)
+            BlzSetAbilityTooltip(ability, EMPTY, 0)
+            Preloader(path)
+            local loaded = BlzGetAbilityTooltip(ability, 0)
+            BlzSetAbilityTooltip(ability, original, 0)
+            if loaded == EMPTY then
+                return nil
+            end
+            return loaded
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Profile: everything that survives between runs.
+    ---------------------------------------------------------------------------
+    local Profile = {data = nil}
+
+    function Profile.new()
+        return {gold = 0, goldTotal = 0, kills = 0, runs = 0, wins = 0, bosses = 0, bestLevel = 0, unlocked = 1,
+            zoneWins = {}, zoneBest = {}, heroWins = {}, factionWins = {}, diffWins = {},
+            -- zoneDiff: best difficulty cleared per zone (4 = a Mythic+ key).
+            -- keyMax: highest keystone a zone may be started at; keyBest: best timed.
+            zoneDiff = {}, keyMax = {}, keyBest = {},
+            -- gear: item id -> dropped item level; upg: item id -> upgrade steps.
+            gear = {}, upg = {},
+            -- opts: sound volumes in percent, keyed as in VOLUMES (missing = 100),
+            -- and wasd = 1 when the hero walks with the movement keys.
+            -- inv: inventory slot 1..6 -> GEAR index of the item carried there.
+            -- starts: hero id -> index in its pool of the spell it starts with.
+            -- binds: action key (ACTIONS) -> key code, when not the default.
+            ach = {}, perks = {}, talents = {}, codex = {}, opts = {}, inv = {}, starts = {}, binds = {}}
+    end
+
+    function Profile.encode(p)
+        local keys = {}
+        for key in pairs(p) do
+            keys[#keys + 1] = key
+        end
+        table.sort(keys)
+        local parts = {'WS1'}
+        for _, key in ipairs(keys) do
+            local value = p[key]
+            if type(value) == 'table' then
+                local items = {}
+                for mapKey, mapValue in pairs(value) do
+                    items[#items + 1] = tostring(mapKey) .. ':' .. tostring(math.floor(mapValue))
+                end
+                table.sort(items)
+                parts[#parts + 1] = key .. '=@' .. table.concat(items, ',')
+            elseif type(value) == 'number' then
+                parts[#parts + 1] = key .. '=' .. tostring(math.floor(value))
+            end
+        end
+        return table.concat(parts, ';')
+    end
+
+    function Profile.decode(s)
+        local p = Profile.new()
+        if type(s) ~= 'string' or s:sub(1, 3) ~= 'WS1' then
+            return p
+        end
+        for key, value in s:gmatch('([\037w_]+)=([^;]*)') do
+            if value:sub(1, 1) == '@' then
+                local map = {}
+                for mapKey, mapValue in value:sub(2):gmatch('([^,:]+):([^,]*)') do
+                    map[mapKey] = tonumber(mapValue) or 0
+                end
+                p[key] = map
+            else
+                p[key] = tonumber(value) or 0
+            end
+        end
+        return p
+    end
+
+    function Profile.load()
+        local ok, raw = pcall(FileIO.load, CFG.SAVE_FILE)
+        Profile.data = Profile.decode(ok and raw or nil)
+        -- Saves from before the inventory carry their six best items.
+        local p = Profile.data
+        if next(p.inv) == nil and next(p.gear) ~= nil then
+            local owned = {}
+            for _, item in ipairs(GEAR) do
+                if p.gear[item.id] then
+                    owned[#owned + 1] = item
+                end
+            end
+            table.sort(owned, function(a, b)
+                return gearLevel(p, a) > gearLevel(p, b)
+            end)
+            for slot = 1, math.min(INVENTORY_SIZE, #owned) do
+                p.inv[tostring(slot)] = owned[slot].index
+            end
+        end
+    end
+
+    function Profile.save()
+        if Profile.data then
+            pcall(FileIO.save, CFG.SAVE_FILE, Profile.encode(Profile.data))
+        end
+    end
+
+    function Profile.inc(map, key, amount)
+        key = tostring(key)
+        map[key] = (map[key] or 0) + (amount or 1)
+    end
+
+    function Profile.perk(key)
+        return Profile.data.perks[key] or 0
+    end
+
+    function Profile.talent(key)
+        return Profile.data.talents[key] or 0
+    end
+
+    function Profile.points()
+        local earned = 0
+        for _, a in ipairs(ACHIEVEMENTS) do
+            if Profile.data.ach[a.key] then
+                earned = earned + a.points
+            end
+        end
+        local spent = 0
+        for _, perk in ipairs(PERKS) do
+            for rank = 1, Profile.perk(perk.key) do
+                spent = spent + perk.costs[rank]
+            end
+        end
+        return earned - spent, earned, spent
+    end
+
+    function Profile.checkAchievements()
+        local earned = {}
+        for _, a in ipairs(ACHIEVEMENTS) do
+            if not Profile.data.ach[a.key] then
+                local current, goal = a.progress(Profile.data)
+                if current >= goal then
+                    Profile.data.ach[a.key] = 1
+                    earned[#earned + 1] = a
+                end
+            end
+        end
+        return earned
+    end
+
+    function Profile.zoneDiff(zoneIndex)
+        return Profile.data.zoneDiff[tostring(zoneIndex)] or 0
+    end
+
+    -- Heroic opens after a Normal clear of the zone, Mythic after Heroic,
+    -- Mythic+ after Mythic.
+    function Profile.difficultyOpen(zoneIndex, difficultyIndex)
+        return difficultyIndex == 1 or Profile.zoneDiff(zoneIndex) >= difficultyIndex - 1
+    end
+
+    function Profile.keyMax(zoneIndex)
+        return math.max(2, Profile.data.keyMax[tostring(zoneIndex)] or 2)
+    end
+
+    function Profile.keyBest(zoneIndex)
+        return Profile.data.keyBest[tostring(zoneIndex)] or 0
+    end
+
+    function Profile.itemLevel(item)
+        return gearLevel(Profile.data, item)
+    end
+
+    function Profile.itemValue(item, ilvl)
+        return item.stat.per * gearScale(ilvl)
+    end
+
+    -- Account-wide bonuses from talents, worn gear and perks.
+    function Profile.applyBonuses(s)
+        for _, talent in ipairs(TALENTS) do
+            local rank = Profile.talent(talent.key)
+            if rank > 0 then
+                talent.apply(s, talent.per * rank)
+            end
+        end
+        for _, item in pairs(gearEquipped(Profile.data)) do
+            item.stat.apply(s, Profile.itemValue(item, Profile.itemLevel(item)))
+        end
+        if Profile.perk('secondwind') > 0 then
+            s.lives = s.lives + 1
+        end
+        s.luck = s.luck + 0.15 * Profile.perk('lucky')
+    end
+
+    ---------------------------------------------------------------------------
+    -- UI toolkit. All positions use the 4:3 frame space: x from 0 to 0.8,
+    -- y from 0 (bottom) to 0.6 (top). "top" is the y of the frame's top edge.
+    ---------------------------------------------------------------------------
+    local UI = {n = 0, handlers = {}}
+
+    -- Coloured wash laid inside a button: the escape-menu button keeps its own
+    -- frame and texture, the wash marks the primary (red) and positive (green) ones.
+    local STYLE = {
+        dark = {wash = {70, 34, 14, 120}},
+        tab = {wash = {70, 34, 14, 120}},
+        red = {wash = {170, 24, 12, 125}},
+        green = {wash = {40, 140, 40, 105}}
+    }
+
+    function UI.init()
+        UI.game = BlzGetOriginFrame(ORIGIN_FRAME_GAME_UI, 0)
+        UI.trigger = CreateTrigger()
+        TriggerAddAction(UI.trigger, function()
+            local frame = BlzGetTriggerFrame()
+            local handler = UI.handlers[frame]
+            if handler == nil then
+                return
+            end
+            local event = BlzGetTriggerFrameEvent()
+            local action = nil
+            if event == FRAMEEVENT_CONTROL_CLICK then
+                -- Drop keyboard focus so the clicked button cannot swallow keys.
+                if GetTriggerPlayer() == GetLocalPlayer() then
+                    BlzFrameSetEnable(frame, false)
+                    BlzFrameSetEnable(frame, true)
+                end
+                action = handler.click
+            elseif event == FRAMEEVENT_MOUSE_ENTER then
+                action = handler.enter
+            elseif event == FRAMEEVENT_MOUSE_LEAVE then
+                action = handler.leave
+            end
+            if action then
+                UI.safe(action)
+            end
+        end)
+    end
+
+    function UI.safe(fn, ...)
+        local ok, err = pcall(fn, ...)
+        if not ok then
+            UI.errors = (UI.errors or 0) + 1
+            if UI.errors <= 6 then
+                print('|cffff4040Warcraft Survivors error:|r ' .. tostring(err))
+            end
+        end
+    end
+
+    function UI.name()
+        UI.n = UI.n + 1
+        return 'WS' .. UI.n
+    end
+
+    function UI.place(frame, x, top, w, h)
+        BlzFrameClearAllPoints(frame)
+        BlzFrameSetAbsPoint(frame, FRAMEPOINT_TOPLEFT, x, top)
+        BlzFrameSetSize(frame, w, h)
+    end
+
+    function UI.group(parent)
+        local frame = BlzCreateFrameByType('FRAME', UI.name(), parent or UI.game, '', 0)
+        UI.place(frame, 0.0, 0.6, 0.8, 0.6)
+        return frame
+    end
+
+    function UI.tint(frame, r, g, b, a)
+        BlzFrameSetVertexColor(frame, BlzConvertColor(a or 255, r, g, b))
+    end
+
+    function UI.box(parent, x, top, w, h, r, g, b, a, texture)
+        local frame = BlzCreateFrameByType('BACKDROP', UI.name(), parent, '', 0)
+        UI.place(frame, x, top, w, h)
+        BlzFrameSetTexture(frame, texture or TEX.white, 0, true)
+        UI.tint(frame, r or 255, g or 255, b or 255, a or 255)
+        return frame
+    end
+
+    function UI.image(parent, texture, x, top, w, h)
+        return UI.box(parent, x, top, w, h, 255, 255, 255, 255, texture)
+    end
+
+    function UI.text(parent, s, x, top, w, h, size, align, valign)
+        local frame = BlzCreateFrameByType('TEXT', UI.name(), parent, '', 0)
+        UI.place(frame, x, top, w, h)
+        BlzFrameSetFont(frame, CFG.FONT, size or 0.0095, 0)
+        BlzFrameSetTextAlignment(frame, valign or TEXT_JUSTIFY_MIDDLE, align or TEXT_JUSTIFY_LEFT)
+        BlzFrameSetText(frame, s or '')
+        return frame
+    end
+
+    -- Classic backdrop from a stock template, which draws its own border.
+    function UI.frame(parent, template, x, top, w, h, alpha)
+        local frame = BlzCreateFrameByType('BACKDROP', UI.name(), parent, template, 0)
+        UI.place(frame, x, top, w, h)
+        if alpha then
+            BlzFrameSetAlpha(frame, alpha)
+        end
+        return frame
+    end
+
+    -- Edge colours in this file are gold shades; the classic edge is gold
+    -- already, so only their brightness is kept (selected rows stay bright).
+    function UI.edgeTint(frames, r, g, b, a)
+        local v = math.floor(U.clamp((r + g + b) / 474, 0, 1) * 255)
+        UI.tintAll(frames, v, v, v, a or 255)
+    end
+
+    -- Thin gold outline with no fill, returned as a list for UI.edgeTint.
+    function UI.border(parent, x, top, w, h, thickness, r, g, b, a)
+        local frame = UI.frame(parent, TPL.box, x, top, w, h)
+        BlzFrameSetTexture(frame, TEX.clear, 0, true)
+        local edge = {frame}
+        UI.edgeTint(edge, r or 214, g or 170, b or 90, a)
+        return edge
+    end
+
+    function UI.tintAll(frames, r, g, b, a)
+        for _, frame in ipairs(frames) do
+            UI.tint(frame, r, g, b, a)
+        end
+    end
+
+    -- The escape-menu window: marble with the ornate gold frame. Its corner
+    -- pieces are 0.048 wide, so small panels take the thin plate instead.
+    function UI.panel(parent, x, top, w, h, alpha)
+        local template = math.min(w, h) >= 0.12 and TPL.panel or TPL.box
+        local bg = UI.frame(parent, template, x, top, w, h, alpha)
+        return {bg = bg, frames = {bg}}
+    end
+
+    -- Dark wood plate with a thin gold edge, for rows and small boxes.
+    function UI.plate(parent, x, top, w, h, alpha)
+        return UI.frame(parent, TPL.box, x, top, w, h, alpha)
+    end
+
+    -- Centered gold heading, as on the stock menu windows.
+    function UI.heading(parent, s, x, top, w, size)
+        size = size or 0.014
+        return UI.text(parent, U.col(GOLD, s), x, top, w, size * 1.6, size, TEXT_JUSTIFY_CENTER)
+    end
+
+    -- Gold double rule under a title, centered on cx, w wide.
+    function UI.ornament(parent, cx, top, w)
+        UI.box(parent, cx - w / 2, top, w, 0.0012, 214, 170, 90, 235)
+        UI.box(parent, cx - w * 0.36, top - 0.0035, w * 0.72, 0.0008, 214, 170, 90, 170)
+    end
+
+    -- Gold heading set between two thin gold rules, centered in w.
+    function UI.rule(parent, title, x, top, w, size)
+        size = size or 0.0125
+        local text = UI.text(parent, U.col(GOLD, title), x, top, w, 0.02, size, TEXT_JUSTIFY_CENTER)
+        local lineW = w / 2 - (string.len(title) * size * 0.38 + 0.01)
+        if lineW > 0.01 then
+            UI.box(parent, x, top - 0.0102, lineW, 0.0008, 150, 112, 58, 210)
+            UI.box(parent, x + w - lineW, top - 0.0102, lineW, 0.0008, 150, 112, 58, 210)
+        end
+        return text
+    end
+
+    -- Lobby panel: the escape menu's stone and gold frame around a dark
+    -- fill, with an optional ruled heading inside its top edge. Content
+    -- keeps LAY.pad (0.022) clear of the frame.
+    function UI.card(parent, x, top, w, h, title)
+        local fill = UI.box(parent, x + 0.008, top - 0.008, w - 0.016, h - 0.016, 12, 9, 7, 242)
+        local frame = UI.frame(parent, TPL.panel, x, top, w, h)
+        BlzFrameSetTexture(frame, TEX.clear, 0, true)
+        if title then
+            UI.rule(parent, title, x + 0.024, top - 0.018, w - 0.048)
+        end
+        return frame, fill
+    end
+
+    -- Resizes a card from UI.card (same top and width, new height).
+    function UI.sizeCard(frame, fill, x, top, w, h)
+        UI.place(fill, x + 0.008, top - 0.008, w - 0.016, h - 0.016)
+        UI.place(frame, x, top, w, h)
+    end
+
+    -- Invisible clickable area; visuals are drawn by the caller underneath.
+    function UI.hit(parent, x, top, w, h, onClick, onEnter, onLeave)
+        local frame = BlzCreateFrameByType('GLUETEXTBUTTON', UI.name(), parent, 'ScriptDialogButton', 0)
+        UI.place(frame, x, top, w, h)
+        BlzFrameSetText(frame, '')
+        BlzFrameSetAlpha(frame, 0)
+        BlzFrameSetLevel(frame, 8)
+        UI.handlers[frame] = {click = onClick, enter = onEnter, leave = onLeave}
+        BlzTriggerRegisterFrameEvent(UI.trigger, frame, FRAMEEVENT_CONTROL_CLICK)
+        BlzTriggerRegisterFrameEvent(UI.trigger, frame, FRAMEEVENT_MOUSE_ENTER)
+        BlzTriggerRegisterFrameEvent(UI.trigger, frame, FRAMEEVENT_MOUSE_LEAVE)
+        return frame
+    end
+
+    -- Escape-menu button: normal and disabled backdrops, a style wash, the
+    -- stock highlight for hover and the active tab, and a gold label.
+    function UI.button(parent, x, top, w, h, label, onClick, style, size)
+        local b = {style = STYLE[style or 'dark'], enabled = true, active = false, hover = false, visible = true,
+            raw = label or ''}
+        b.bg = UI.frame(parent, TPL.button, x, top, w, h)
+        b.off = UI.frame(parent, TPL.buttonOff, x, top, w, h)
+        b.wash = UI.box(parent, x, top, w, h, 255, 255, 255, 0)
+        b.glow = UI.box(parent, x, top, w, h, 255, 255, 255, 255, TEX.highlight)
+        b.label = UI.text(parent, b.raw, x, top, w, h, size or 0.011, TEXT_JUSTIFY_CENTER)
+        b.hit = UI.hit(parent, x, top, w, h, function()
+            if b.enabled and onClick then
+                onClick(b)
+            end
+        end, function()
+            b.hover = true
+            UI.paint(b)
+        end, function()
+            b.hover = false
+            UI.paint(b)
+        end)
+        UI.moveButton(b, x, top, w, h)
+        UI.paint(b)
+        return b
+    end
+
+    function UI.moveButton(b, x, top, w, h)
+        local inset = math.min(0.005, h * 0.16)
+        UI.place(b.bg, x, top, w, h)
+        UI.place(b.off, x, top, w, h)
+        UI.place(b.wash, x + inset, top - inset, w - inset * 2, h - inset * 2)
+        UI.place(b.glow, x + inset * 0.6, top - inset * 0.6, w - inset * 1.2, h - inset * 1.2)
+        UI.place(b.label, x, top, w, h)
+        UI.place(b.hit, x, top, w, h)
+    end
+
+    function UI.paint(b)
+        local live = b.enabled or b.active
+        BlzFrameSetVisible(b.bg, b.visible and live)
+        BlzFrameSetVisible(b.off, b.visible and not live)
+        local wash = b.style.wash
+        if wash then
+            UI.tint(b.wash, wash[1], wash[2], wash[3], live and wash[4] or wash[4] // 3)
+        else
+            UI.tint(b.wash, 0, 0, 0, 0)
+        end
+        BlzFrameSetAlpha(b.glow, b.active and 210 or ((b.hover and b.enabled) and 130 or 0))
+        local text = b.raw
+        if not b.enabled then
+            text = U.col('6e665c', U.strip(b.raw))
+        elseif not text:find('|c') then
+            text = U.col((b.hover or b.active) and 'ffffff' or 'fcd312', text)
+        end
+        BlzFrameSetText(b.label, text)
+    end
+
+    function UI.setLabel(b, s)
+        b.raw = s
+        UI.paint(b)
+    end
+
+    function UI.setEnabled(b, enabled)
+        b.enabled = enabled
+        UI.paint(b)
+    end
+
+    function UI.setActive(b, active)
+        b.active = active
+        UI.paint(b)
+    end
+
+    function UI.showButton(b, visible)
+        b.visible = visible
+        BlzFrameSetVisible(b.wash, visible)
+        BlzFrameSetVisible(b.glow, visible)
+        BlzFrameSetVisible(b.label, visible)
+        BlzFrameSetVisible(b.hit, visible)
+        UI.paint(b)
+    end
+
+    -- Icon with a tinted square frame behind it (used for heroes, spells,
+    -- gear and achievements). Returns a table with set/show helpers.
+    function UI.icon(parent, texture, x, top, size, onClick, onEnter, onLeave)
+        local o = {}
+        local pad = size * 0.09
+        o.frame = UI.box(parent, x - pad, top + pad, size + pad * 2, size + pad * 2, 140, 110, 64, 255, TEX.iconFrame)
+        o.img = UI.image(parent, texture, x, top, size, size)
+        if onClick or onEnter then
+            o.hit = UI.hit(parent, x, top, size, size, onClick, onEnter, onLeave)
+        end
+        return o
+    end
+
+    function UI.setIcon(o, texture, dim)
+        BlzFrameSetTexture(o.img, texture, 0, true)
+        if dim then
+            UI.tint(o.img, 70, 70, 70, 255)
+        else
+            UI.tint(o.img, 255, 255, 255, 255)
+        end
+    end
+
+    function UI.frameColor(o, r, g, b)
+        UI.tint(o.frame, r, g, b, 255)
+    end
+
+    function UI.showIcon(o, visible)
+        BlzFrameSetVisible(o.frame, visible)
+        BlzFrameSetVisible(o.img, visible)
+        if o.hit then
+            BlzFrameSetVisible(o.hit, visible)
+        end
+    end
+
+    -- Bar with a gold Warcraft frame on top of a tinted fill.
+    function UI.bar(parent, x, top, w, h, r, g, b, textSize)
+        local o = {w = w, h = h}
+        o.back = UI.box(parent, x, top, w, h, 12, 9, 6, 235)
+        o.fill = UI.box(parent, x, top, w, h, r, g, b, 255, TEX.barFill)
+        o.edge = UI.box(parent, x - h * 0.35, top + h * 0.3, w + h * 0.7, h * 1.6, 255, 255, 255, 255, TEX.barFrame)
+        o.text = UI.text(parent, '', x, top, w, h, textSize or 0.0085, TEXT_JUSTIFY_CENTER)
+        return o
+    end
+
+    function UI.setBar(o, fraction, label)
+        BlzFrameSetSize(o.fill, math.max(0.0001, o.w * U.clamp(fraction, 0, 1)), o.h)
+        if label then
+            BlzFrameSetText(o.text, label)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Game engine
+    ---------------------------------------------------------------------------
+    local G = {}
+    local Hud, Cards, Finale, Lobby, Engine, Options, Keys = {}, {}, {}, {}, {}, {}, {}
+    local R = nil -- the current run, nil while in the lobby
+    -- keys: action -> held; down: key code -> held (to tell a press from its repeats).
+    local S = {heroIndex = 1, faction = 'Alliance', zone = 1, difficulty = 1, keyLevel = 2, tab = 'character', keys = {},
+        down = {}}
+    local TWO_PI = 6.28318530718
+
+    function G.initWorld()
+        local area = bj_mapInitialPlayableArea
+        G.cx = GetRectCenterX(area)
+        G.cy = GetRectCenterY(area)
+        G.minX = GetRectMinX(area) + 160
+        G.maxX = GetRectMaxX(area) - 160
+        G.minY = GetRectMinY(area) + 160
+        G.maxY = GetRectMaxY(area) - 160
+        G.PLAYER = Player(0)
+        G.ENEMY = Player(CFG.ENEMY_PLAYER)
+        G.zLoc = Location(0, 0)
+        G.pathItem = CreateItem(FourCC('afac'), G.cx, G.cy)
+        if G.pathItem then
+            SetItemVisible(G.pathItem, false)
+        end
+        SetPlayerAllianceStateBJ(G.ENEMY, G.PLAYER, bj_ALLIANCE_UNALLIED)
+        SetPlayerAllianceStateBJ(G.PLAYER, G.ENEMY, bj_ALLIANCE_UNALLIED)
+        FogEnable(false)
+        FogMaskEnable(false)
+        SuspendTimeOfDay(true)
+    end
+
+    function G.groundZ(x, y)
+        MoveLocation(G.zLoc, x, y)
+        return GetLocationZ(G.zLoc)
+    end
+
+    -- Terrain, cliffs, trees and doodads all block; uses a hidden item probe.
+    function G.walkable(x, y)
+        if x < G.minX or x > G.maxX or y < G.minY or y > G.maxY then
+            return false
+        end
+        if IsTerrainPathable(x, y, PATHING_TYPE_WALKABILITY) then
+            return false
+        end
+        if G.pathItem == nil then
+            return true
+        end
+        SetItemPosition(G.pathItem, x, y)
+        local dx = GetItemX(G.pathItem) - x
+        local dy = GetItemY(G.pathItem) - y
+        SetItemVisible(G.pathItem, false)
+        return dx * dx + dy * dy < 100
+    end
+
+    function G.after(delay, fn)
+        local list = R.sched
+        list[#list + 1] = {t = R.time + delay, fn = fn}
+    end
+
+    function G.runScheduled()
+        local list = R.sched
+        local due = nil
+        local i = 1
+        while i <= #list do
+            local entry = list[i]
+            if entry.t <= R.time then
+                due = due or {}
+                due[#due + 1] = entry.fn
+                list[i] = list[#list]
+                list[#list] = nil
+            else
+                i = i + 1
+            end
+        end
+        if due then
+            for _, fn in ipairs(due) do
+                fn()
+            end
+        end
+    end
+
+    function G.fx(model, x, y, scale)
+        local fx = AddSpecialEffect(model, x, y)
+        if scale and scale ~= 1 then
+            BlzSetSpecialEffectScale(fx, scale)
+        end
+        DestroyEffect(fx)
+    end
+
+    -- Loops a playlist of the game's own soundtrack (Sound\Music\mp3Music),
+    -- starting on a random track. The same list keeps playing undisturbed.
+    function G.playMusic(names)
+        if names == nil or #names == 0 then
+            return
+        end
+        local key = table.concat(names, ';')
+        if G.music == key then
+            return
+        end
+        G.music = key
+        local first = GetRandomInt(1, #names)
+        local list = {}
+        for i = 0, #names - 1 do
+            list[#list + 1] = 'Sound\\Music\\mp3Music\\' .. names[math.fmod(first - 1 + i, #names) + 1] .. '.mp3'
+        end
+        ClearMapMusic()
+        StopMusic(false)
+        PlayMusic(table.concat(list, ';'))
+    end
+
+    -- A Warcraft III sound by its label (UI\SoundInfo\AbilitySounds.slk), at a
+    -- point. Most spell effect models carry their own sound; this is for the
+    -- spells whose art is silent (def.sound on cast, def.waveSound per wave).
+    -- The engine replays one handle per label; Reforged makes one per play.
+    G.sounds = {}
+    function G.sound(label, x, y)
+        local snd = G.sounds[label]
+        if snd == nil then
+            snd = CreateSoundFromLabel(label, false, true, true, 10, 10)
+            if snd == nil then
+                return
+            end
+            if Engine.active() then
+                G.sounds[label] = snd
+            end
+        end
+        SetSoundPosition(snd, x, y, 50)
+        StartSound(snd)
+        if not Engine.active() then
+            KillSoundWhenDone(snd)
+        end
+    end
+
+    function G.timedFx(model, x, y, scale, duration)
+        local fx = AddSpecialEffect(model, x, y)
+        if scale and scale ~= 1 then
+            BlzSetSpecialEffectScale(fx, scale)
+        end
+        R.fx[fx] = true
+        local run = R
+        G.after(duration, function()
+            if run.fx[fx] then
+                run.fx[fx] = nil
+                DestroyEffect(fx)
+            end
+        end)
+    end
+
+    function G.lightning(code, x1, y1, z1, x2, y2, z2, duration)
+        local bolt = AddLightningEx(code, false, x1, y1, z1, x2, y2, z2)
+        if bolt == nil then
+            return
+        end
+        R.lightnings[bolt] = true
+        local run = R
+        G.after(duration or 0.3, function()
+            if run.lightnings[bolt] then
+                run.lightnings[bolt] = nil
+                DestroyLightning(bolt)
+            end
+        end)
+    end
+
+    function G.floatText(x, y, s, size, r, g, b)
+        -- Warcraft III keeps 100 text tags; leave room for the game's own.
+        if R.tagCount >= 75 then
+            return
+        end
+        local tag = CreateTextTag()
+        if tag == nil then
+            return
+        end
+        R.tagCount = R.tagCount + 1
+        SetTextTagText(tag, s, size * 0.0031)
+        SetTextTagPos(tag, x + GetRandomReal(-20, 20), y, 60)
+        SetTextTagColor(tag, r, g, b, 255)
+        SetTextTagVelocity(tag, 0, 0.04)
+        SetTextTagPermanent(tag, false)
+        SetTextTagLifespan(tag, 0.8)
+        SetTextTagFadepoint(tag, 0.45)
+        local run = R
+        G.after(0.85, function()
+            run.tagCount = run.tagCount - 1
+        end)
+    end
+
+    ---------------------------------------------------------------------------
+    -- Stats
+    ---------------------------------------------------------------------------
+    function G.baseStats()
+        return {damage = 0, attackSpeed = 0, cdr = 0, area = 0, move = 0, maxHp = 0, regen = 0, armor = 0,
+            crit = 0.05, critMult = 1.75, lifesteal = 0, pickup = 0, xp = 0, gold = 0, luck = 0, dodge = 0,
+            thorns = 0, multishot = 0, duration = 0, dr = 0, cleave = 0, bash = 0, bashDamage = 0,
+            attackSlow = 0, attackBonus = 0, killHeal = 0, killGold = 0, explode = 0, lives = 0, range = 0}
+    end
+
+    function G.spellValues(def, rank, power, s)
+        local r = rank - 1
+        local dmgMult = (1 + 0.35 * r) * power * (1 + s.damage)
+        local v = {rank = rank}
+        v.dmg = (def.dmg or 0) * dmgMult
+        v.dot = (def.dot or 0) * dmgMult
+        v.impact = (def.impactDamage or 0) * dmgMult
+        v.heal = (def.heal or 0) * (1 + 0.3 * r) * power
+        v.radius = (def.radius or 0) * (1 + 0.06 * r) * (1 + s.area)
+        v.range = def.range or 900
+        v.count = (def.count or 1) + math.floor(r / (def.countEvery or 99))
+        if def.kind == 'bolt' or def.kind == 'line' then
+            v.count = v.count + s.multishot
+        end
+        -- 5 percent faster per rank, compounding: never reaches zero.
+        v.cd = (def.cd or 1) * 0.95 ^ r * (1 - math.min(0.6, s.cdr))
+        if def.kind == 'summon' then
+            -- Out for exactly one cooldown, so they cannot pile up on their own;
+            -- spell duration (Persistence) lets the waves overlap.
+            v.dur = v.cd * (1 + s.duration)
+        else
+            v.dur = (def.dur or 0) * (1 + 0.1 * r) * (1 + s.duration)
+        end
+        v.stun = (def.stun or 0) * (1 + 0.1 * r)
+        v.amount = (def.per or 0) * rank * power
+        v.bonus = (def.basePct or 0) + v.amount
+        -- Channeled areas (Bladestorm, Blizzard, Earthquake...) last longer
+        -- with spell duration: more waves at the same pace.
+        v.waves = def.waves or 1
+        if def.kind == 'zone' then
+            v.waves = math.floor(v.waves * (1 + s.duration) + 0.5)
+        end
+        return v
+    end
+
+    local KIND_NAMES = {bolt = 'Missile', nova = 'Burst', zone = 'Area', chain = 'Lightning', line = 'Wave',
+        orbit = 'Orbit', aura = 'Aura', summon = 'Summon', heal = 'Heal', buff = 'Buff', passive = 'Passive'}
+
+    function G.describe(def, v)
+        local show = {
+            dmg = v.dmg, dot = v.dot, impact = v.impact, heal = v.heal, radius = v.radius, count = v.count,
+            dur = v.dur, stun = v.stun, waves = v.waves, rank = v.rank,
+            pct = def.flat and v.amount or v.amount * 100, pct2 = v.bonus * 100, pct2b = v.amount * 200,
+            rank3 = v.rank * 3, rank6 = v.rank * 6, rank10 = v.rank * 10
+        }
+        return (def.desc:gsub('{(\037w+)}', function(key)
+            local value = show[key]
+            if value == nil then
+                return '?'
+            end
+            return U.col('ffffff', U.num(value))
+        end))
+    end
+
+    function G.blessingValue(b, x)
+        return b.flat and x or x * 100
+    end
+
+    function G.describeBlessing(b, x)
+        return (b.desc:gsub('{v}', U.col('ffffff', U.num(G.blessingValue(b, x)))))
+    end
+
+    function G.recomputeStats()
+        local s = G.baseStats()
+        if R.melee then
+            s.cleave = 0.35
+        end
+        U.factionOf(R.def).apply(s)
+        Profile.applyBonuses(s)
+        for key, b in pairs(R.blessings) do
+            BLESSING_BY_KEY[key].apply(s, b.value)
+        end
+        for _, inst in ipairs(R.spells) do
+            -- Passives, and auras or bolts that also grant a stat; buffs apply while active.
+            if inst.def.apply and inst.def.kind ~= 'buff' then
+                inst.def.apply(s, G.spellValues(inst.def, inst.rank, inst.power, s))
+            end
+        end
+        for _, buff in pairs(R.buffs) do
+            if buff.def.apply then
+                buff.def.apply(s, buff.v)
+            end
+        end
+        s.cdr = math.min(s.cdr, 0.6)
+        s.dodge = math.min(s.dodge, 0.6)
+        s.dr = math.min(s.dr, 0.7)
+        R.stats = s
+
+        local hero = R.hero
+        local maxHp = math.floor(R.def.hp + s.maxHp)
+        local oldMax = BlzGetUnitMaxHP(hero)
+        if maxHp ~= oldMax then
+            local life = GetWidgetLife(hero)
+            BlzSetUnitMaxHP(hero, maxHp)
+            if maxHp > oldMax then
+                SetWidgetLife(hero, life + (maxHp - oldMax))
+            else
+                SetWidgetLife(hero, math.min(life, maxHp))
+            end
+        end
+        BlzSetUnitArmor(hero, s.armor)
+        R.moveSpeed = R.baseMove * (1 + s.move)
+        R.pickupRange = CFG.BASE_PICKUP * (1 + s.pickup)
+        for _, inst in ipairs(R.spells) do
+            inst.v = G.spellValues(inst.def, inst.rank, inst.power, s)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Enemy queries. Positions are cached once per tick.
+    ---------------------------------------------------------------------------
+    function G.refreshEnemyCache()
+        local list, xs, ys = R.elist, R.ex, R.ey
+        local n = 0
+        for u in pairs(R.enemies) do
+            n = n + 1
+            list[n] = u
+            xs[n] = GetUnitX(u)
+            ys[n] = GetUnitY(u)
+        end
+        for i = n + 1, R.en do
+            list[i] = nil
+        end
+        R.en = n
+    end
+
+    function G.nearest(x, y, range, count, exclude)
+        local found = {}
+        local r2 = range * range
+        for i = 1, R.en do
+            local u = R.elist[i]
+            if R.enemies[u] and not (exclude and exclude[u]) then
+                local dx = R.ex[i] - x
+                local dy = R.ey[i] - y
+                local d2 = dx * dx + dy * dy
+                if d2 <= r2 then
+                    found[#found + 1] = {u = u, d = d2, x = R.ex[i], y = R.ey[i]}
+                end
+            end
+        end
+        if #found > 1 then
+            table.sort(found, function(a, b)
+                return a.d < b.d
+            end)
+        end
+        for i = #found, count + 1, -1 do
+            found[i] = nil
+        end
+        return found
+    end
+
+    -- Bosses and elites first, then the nearest.
+    function G.priorityTargets(range, count)
+        local list = G.nearest(R.hx, R.hy, range, 999)
+        table.sort(list, function(a, b)
+            local ia, ib = R.enemies[a.u], R.enemies[b.u]
+            local pa = (ia and (ia.boss or ia.elite)) and 1 or 0
+            local pb = (ib and (ib.boss or ib.elite)) and 1 or 0
+            if pa ~= pb then
+                return pa > pb
+            end
+            return a.d < b.d
+        end)
+        for i = #list, count + 1, -1 do
+            list[i] = nil
+        end
+        return list
+    end
+
+    function G.inRange(x, y, radius, fn)
+        local r2 = radius * radius
+        for i = 1, R.en do
+            local dx = R.ex[i] - x
+            local dy = R.ey[i] - y
+            if dx * dx + dy * dy <= r2 then
+                local u = R.elist[i]
+                if R.enemies[u] then
+                    fn(u, R.ex[i], R.ey[i])
+                end
+            end
+        end
+    end
+
+    function G.countInRange(x, y, radius)
+        local count = 0
+        local r2 = radius * radius
+        for i = 1, R.en do
+            local dx = R.ex[i] - x
+            local dy = R.ey[i] - y
+            if dx * dx + dy * dy <= r2 then
+                count = count + 1
+            end
+        end
+        return count
+    end
+
+    function G.densest(range, radius)
+        local hx, hy = R.hx, R.hy
+        local r2 = range * range
+        local rad2 = radius * radius
+        local n = R.en
+        local step = n > 70 and 2 or 1
+        local best, bestCount = nil, 0
+        for i = 1, n, step do
+            local dx = R.ex[i] - hx
+            local dy = R.ey[i] - hy
+            if dx * dx + dy * dy <= r2 then
+                local count = 0
+                local cx, cy = R.ex[i], R.ey[i]
+                for j = 1, n do
+                    local ox = R.ex[j] - cx
+                    local oy = R.ey[j] - cy
+                    if ox * ox + oy * oy <= rad2 then
+                        count = count + 1
+                    end
+                end
+                if count > bestCount then
+                    bestCount = count
+                    best = i
+                end
+            end
+        end
+        if best then
+            return R.ex[best], R.ey[best]
+        end
+        return nil, nil
+    end
+
+    ---------------------------------------------------------------------------
+    -- Damage, crowd control and healing
+    ---------------------------------------------------------------------------
+    function G.damage(u, amount, source, canCrit)
+        if R.enemies[u] == nil or amount <= 0 then
+            return
+        end
+        local s = R.stats
+        local crit = false
+        if canCrit ~= false and GetRandomReal(0, 1) < s.crit then
+            amount = amount * s.critMult
+            crit = true
+        end
+        R.dmgSource = source
+        R.dmgCrit = crit
+        -- The basic attack carries the hero's weapon type, so its hits clash
+        -- like a native attack (other damage is silent).
+        local weapon = source == 'attack' and R.weaponType or WEAPON_TYPE_WHOKNOWS
+        UnitDamageTarget(R.hero, u, amount, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, weapon)
+        R.dmgSource = nil
+        R.dmgCrit = false
+    end
+
+    function G.slow(u, pct, duration)
+        local info = R.enemies[u]
+        if info == nil then
+            return
+        end
+        if info.boss then
+            pct = pct * 0.5
+        end
+        if R.time >= info.slowUntil or pct > info.slowPct then
+            info.slowPct = pct
+        end
+        info.slowUntil = math.max(info.slowUntil, R.time + duration)
+        SetUnitMoveSpeed(u, info.speed * (1 - info.slowPct))
+    end
+
+    function G.stun(u, duration)
+        local info = R.enemies[u]
+        if info == nil or duration <= 0 then
+            return
+        end
+        if info.boss then
+            duration = duration * 0.3
+        end
+        info.stunUntil = math.max(info.stunUntil, R.time + duration)
+        if not info.stunned then
+            info.stunned = true
+            BlzPauseUnitEx(u, true)
+        end
+    end
+
+    function G.dot(u, dps, duration, source)
+        local info = R.enemies[u]
+        if info == nil or dps <= 0 then
+            return
+        end
+        info.dots = info.dots or {}
+        info.dots[source] = {dps = dps, untilT = R.time + duration}
+    end
+
+    function G.heal(amount)
+        if amount <= 0 or R.hero == nil then
+            return
+        end
+        local life = GetWidgetLife(R.hero)
+        if life <= 0.405 then
+            return
+        end
+        SetWidgetLife(R.hero, math.min(BlzGetUnitMaxHP(R.hero), life + amount))
+    end
+
+    function G.addGold(amount)
+        R.gold = R.gold + amount * (1 + R.stats.gold)
+    end
+
+    -- Every damage instance in the game passes through here.
+    function G.onDamage()
+        if R == nil or R.ended then
+            return
+        end
+        local target = BlzGetEventDamageTarget()
+        local source = GetEventDamageSource()
+        local amount = GetEventDamage()
+        if R.images[target] then
+            -- Mirror Images are illusions: every hit on them counts triple.
+            if amount > 0 then
+                BlzSetEventDamage(amount * CFG.IMAGE_DAMAGE_TAKEN)
+            end
+            return
+        end
+        if target == R.hero then
+            if amount <= 0 then
+                return
+            end
+            local s = R.stats
+            if s.dodge > 0 and GetRandomReal(0, 1) < s.dodge then
+                BlzSetEventDamage(0)
+                if CFG.DAMAGE_NUMBERS then
+                    G.floatText(R.hx, R.hy, 'Dodge', 9, 180, 220, 255)
+                end
+                return
+            end
+            amount = amount * (1 - s.dr)
+            if s.thorns > 0 and source and R.enemies[source] then
+                local attacker = source
+                local thorns = s.thorns * (1 + s.damage)
+                G.after(0, function()
+                    G.damage(attacker, thorns, 'thorns', false)
+                end)
+            end
+            if amount >= GetWidgetLife(R.hero) - 1 and R.livesUsed < s.lives then
+                BlzSetEventDamage(0)
+                G.revive()
+                return
+            end
+            BlzSetEventDamage(amount)
+            R.damageTaken = R.damageTaken + amount
+            return
+        end
+
+        local key = R.dmgSource
+        if key == nil then
+            if source == R.hero then
+                key = 'attack'
+            elseif source and R.summons[source] then
+                key = R.summons[source].key
+            end
+        end
+        if key and R.enemies[target] then
+            local dealt = math.min(amount, GetWidgetLife(target))
+            R.meter[key] = (R.meter[key] or 0) + dealt
+            R.damageDone = R.damageDone + dealt
+            if R.stats.lifesteal > 0 then
+                G.heal(dealt * R.stats.lifesteal)
+            end
+            -- Every hit shows its number (damage over time ticks do not).
+            if CFG.DAMAGE_NUMBERS and not R.dmgTick and amount >= 1 then
+                local x, y = GetUnitX(target), GetUnitY(target)
+                if R.dmgCrit then
+                    G.floatText(x, y, U.num(amount) .. '!', 12, 255, 150, 40)
+                else
+                    G.floatText(x, y, U.num(amount), 9, 255, 240, 200)
+                end
+            end
+        end
+    end
+
+    function G.revive()
+        R.livesUsed = R.livesUsed + 1
+        SetWidgetLife(R.hero, BlzGetUnitMaxHP(R.hero) * 0.5)
+        R.invulnUntil = math.max(R.invulnUntil, R.time + 2.5)
+        DestroyEffect(AddSpecialEffectTarget(FX.resurrect, R.hero, 'origin'))
+        G.inRange(R.hx, R.hy, 400, function(u)
+            G.damage(u, 200 * (1 + R.stats.damage), 'revive', false)
+            G.stun(u, 1.5)
+        end)
+        Hud.banner(U.col(GOLD, 'Second chance!') .. '  You rise again.')
+    end
+
+    ---------------------------------------------------------------------------
+    -- Enemies
+    ---------------------------------------------------------------------------
+    function G.spawnPoint(minR, maxR)
+        for _ = 1, 8 do
+            local angle = GetRandomReal(0, TWO_PI)
+            local radius = GetRandomReal(minR, maxR)
+            local x = R.hx + math.cos(angle) * radius
+            local y = R.hy + math.sin(angle) * radius
+            if x > G.minX and x < G.maxX and y > G.minY and y < G.maxY
+                and not IsTerrainPathable(x, y, PATHING_TYPE_WALKABILITY) then
+                return x, y
+            end
+        end
+        return U.clamp(R.hx + GetRandomReal(-maxR, maxR), G.minX, G.maxX),
+            U.clamp(R.hy + GetRandomReal(-maxR, maxR), G.minY, G.maxY)
+    end
+
+    -- WoW difficulty for a run. Mythic+ compounds 10 percent health and 8 percent damage per
+    -- keystone level, with no upper limit.
+    function G.difficulty(index, keyLevel)
+        local base = DIFFICULTIES[index]
+        local d = {index = index, key = base.key, name = base.name, hex = base.hex, hp = base.hp, dmg = base.dmg,
+            reward = base.reward, ilvl = base.ilvl, level = 0}
+        if base.key == 'mplus' then
+            local level = math.max(2, keyLevel or 2)
+            d.level = level
+            d.name = 'Mythic +' .. level
+            d.hp = base.hp * 1.10 ^ (level - 1)
+            d.dmg = base.dmg * 1.08 ^ (level - 1)
+            d.reward = base.reward + 0.15 * (level - 1)
+            -- Loot item level stops climbing at +10, like the end-of-dungeon chest.
+            d.ilvl = base.ilvl + 2 * math.min(level, 10)
+        end
+        return d
+    end
+
+    -- How far through the run: 0 at the start, 1 when the final boss arrives.
+    function G.progress()
+        return math.max(0, R.time / CFG.RUN_LENGTH)
+    end
+
+    -- Three neighbouring roster tiers that walk up the roster in thirty steps.
+    function G.wavePool()
+        local n = #R.zone.enemies
+        local step = math.floor(G.progress() * 30)
+        local span = math.max(0, n - 3)
+        local low = math.min(span, math.floor(math.max(0, step - 1) * span / 27))
+        return low + 1, math.min(n, low + 3)
+    end
+
+    function G.pickEnemyType()
+        local low, high = G.wavePool()
+        return R.zone.enemies[GetRandomInt(low, high)]
+    end
+
+    -- How many enemies the spawner keeps alive. The curve eases in: about 14
+    -- at 1:30, 36 at 4:00, 88 at 8:00 and 120 when the final boss comes,
+    -- fewer in the first zones (zone.density).
+    function G.targetAlive()
+        local density = R.zone.density or 1
+        return math.min(CFG.MAX_ENEMIES, math.floor(8 + 112 * density * G.progress() ^ 1.5))
+    end
+
+    function G.createEnemy(def, x, y, opts)
+        local facing = bj_RADTODEG * Atan2(R.hy - y, R.hx - x)
+        local u = CreateUnit(G.ENEMY, FourCC(def.id), x, y, facing)
+        if u == nil then
+            u = CreateUnit(G.ENEMY, FourCC(R.zone.enemies[1].id), x, y, facing)
+        end
+        if u == nil then
+            u = CreateUnit(G.ENEMY, FourCC('nwlt'), x, y, facing)
+        end
+        if u == nil then
+            return nil
+        end
+        -- The original's scaling: health and damage grow with run progress on
+        -- top of the roster's tier ladder, then the difficulty applies.
+        local progress = G.progress()
+        local minute = R.time / 60
+        local zone, diff = R.zone, R.diff
+        local hp, dmg
+        if opts.boss then
+            hp = opts.boss.hp * zone.power * diff.hp
+            dmg = opts.boss.dmg * zone.power ^ 0.7 * diff.dmg
+        else
+            hp = def.hp * 1.12 ^ ((def.index or 1) - 1) * (1 + progress * 0.75) * zone.power * diff.hp
+            dmg = def.dmg * (1 + progress * 0.9) * zone.power ^ 0.7 * diff.dmg
+        end
+        BlzSetUnitMaxHP(u, math.max(1, math.floor(hp)))
+        SetWidgetLife(u, hp)
+        BlzSetUnitBaseDamage(u, math.max(1, math.floor(dmg)), 0)
+        BlzSetUnitArmor(u, opts.boss and 4 or 0)
+        local speed = U.clamp(GetUnitDefaultMoveSpeed(u), 200, 300) * (1 + minute * 0.01)
+        if opts.boss then
+            speed = 270
+        end
+        SetUnitMoveSpeed(u, speed)
+        IssueTargetOrder(u, 'attack', R.hero)
+        if R.paused then
+            PauseUnit(u, true)
+        end
+        local info = {xp = def.xp or 1, speed = speed, slowPct = 0, slowUntil = 0, stunUntil = 0, stunned = false,
+            boss = opts.boss, final = opts.final, elite = opts.elite, target = R.hero}
+        R.enemies[u] = info
+        R.enemyCount = R.enemyCount + 1
+        return u, info
+    end
+
+    function G.spawnBoss(def, isFinal)
+        local x, y = G.spawnPoint(650, 800)
+        local u, info = G.createEnemy(def, x, y, {boss = def, final = isFinal})
+        if u == nil then
+            return
+        end
+        SetUnitScale(u, def.scale, def.scale, def.scale)
+        BlzSetUnitName(u, def.name)
+        info.xp = isFinal and 80 or 40
+        info.aura = AddSpecialEffectTarget(FX.bossAura, u, 'origin')
+        info.slamAt = R.time + 5.0
+        info.slamDamage = def.dmg * R.zone.power ^ 0.7 * R.diff.dmg * 2.2
+        R.boss = u
+        G.fx(FX.teleport, x, y, 1.5)
+        if isFinal then
+            Hud.banner(U.col(RED, def.name) .. ' has come. Defeat them to win!')
+        else
+            Hud.banner(U.col(RED, def.name) .. ' has entered the fight!')
+        end
+    end
+
+    function G.spawnElite()
+        local x, y = G.spawnPoint(800, 1000)
+        local u, info = G.createEnemy(G.pickEnemyType(), x, y, {elite = true})
+        if u then
+            SetUnitScale(u, 1.4, 1.4, 1.4)
+            SetUnitVertexColor(u, 255, 220, 90, 255)
+            info.xp = 12
+            info.aura = AddSpecialEffectTarget(FX.bossAura, u, 'origin')
+        end
+    end
+
+    function G.updateSpawns(dt)
+        -- Keep the horde topped up to the target, a few at a time; refills
+        -- come slowly early on and faster as the run goes.
+        R.spawnClock = R.spawnClock - dt
+        if R.spawnClock <= 0 then
+            R.spawnClock = 0.5 - 0.3 * math.min(1, G.progress())
+            local target = G.targetAlive()
+            if R.enemyCount < target then
+                local n = math.min(3, math.ceil((target - R.enemyCount) / 6))
+                for _ = 1, n do
+                    local x, y = G.spawnPoint(950, 1250)
+                    G.createEnemy(G.pickEnemyType(), x, y, {})
+                end
+            end
+        end
+
+        -- Half way between bosses, a closing ring of the moment's weakest.
+        local ringsDue = math.floor((R.time + 60) / 120)
+        if ringsDue > R.rings and not R.finalSpawned then
+            R.rings = ringsDue
+            local weakest = R.zone.enemies[(G.wavePool())]
+            local n = math.min(12 + math.floor(G.progress() * 40), CFG.MAX_ENEMIES + 40 - R.enemyCount)
+            for i = 1, n do
+                local angle = i / n * TWO_PI
+                local x = U.clamp(R.hx + math.cos(angle) * 850, G.minX, G.maxX)
+                local y = U.clamp(R.hy + math.sin(angle) * 850, G.minY, G.maxY)
+                G.createEnemy(weakest, x, y, {})
+            end
+            if n > 0 then
+                Hud.banner('They are surrounding you!')
+            end
+        end
+
+        if R.time >= R.nextElite then
+            R.nextElite = R.nextElite + 45
+            G.spawnElite()
+        end
+
+        local boss = R.zone.bosses[R.nextBoss]
+        if boss and R.time >= boss.t then
+            R.nextBoss = R.nextBoss + 1
+            G.spawnBoss(boss, false)
+        end
+        if not R.finalSpawned and R.time >= CFG.RUN_LENGTH then
+            R.finalSpawned = true
+            R.finalAt = R.time
+            G.spawnBoss(R.zone.final, true)
+        end
+    end
+
+    -- Slow/stun/dot upkeep, leash and re-orders. Runs four times a second.
+    function G.updateEnemies()
+        local t = R.time
+        local hx, hy = R.hx, R.hy
+        local burns = {}
+        for u, info in pairs(R.enemies) do
+            if info.stunned and t >= info.stunUntil then
+                info.stunned = false
+                BlzPauseUnitEx(u, false)
+            end
+            if info.slowPct > 0 and t >= info.slowUntil then
+                info.slowPct = 0
+                SetUnitMoveSpeed(u, info.speed)
+            end
+            if info.dots then
+                for source, d in pairs(info.dots) do
+                    if t >= d.untilT then
+                        info.dots[source] = nil
+                    else
+                        burns[#burns + 1] = {u, d.dps * 0.25, source}
+                    end
+                end
+            end
+            local x, y = GetUnitX(u), GetUnitY(u)
+            local dx, dy = x - hx, y - hy
+            if dx * dx + dy * dy > 2000 * 2000 and not info.boss then
+                local nx, ny = G.spawnPoint(900, 1100)
+                SetUnitPosition(u, nx, ny)
+                info.target = R.hero
+                IssueTargetOrder(u, 'attack', R.hero)
+            elseif not info.stunned then
+                -- Mirror Images draw every enemy near them away from the hero.
+                local want = G.decoyNear(x, y, CFG.DECOY_REACH) or R.hero
+                if want ~= info.target or GetUnitCurrentOrder(u) == 0 then
+                    info.target = want
+                    IssueTargetOrder(u, 'attack', want)
+                end
+            end
+            if info.boss and t >= info.slamAt and not info.stunned then
+                info.slamAt = t + 6.5
+                G.bossSlam(u, info)
+            end
+        end
+        R.dmgTick = true
+        for _, burn in ipairs(burns) do
+            G.damage(burn[1], burn[2], burn[3], false)
+        end
+        R.dmgTick = false
+    end
+
+    -- Telegraphed ground slam: get out of the circle.
+    function G.bossSlam(u, info)
+        local x, y = R.hx, R.hy
+        G.timedFx(FX.warning, x, y, 1.6, 1.2)
+        local run = R
+        G.after(1.2, function()
+            if R ~= run or R.enemies[u] == nil then
+                return
+            end
+            G.fx(FX.warStomp, x, y, 1.4)
+            local dx, dy = R.hx - x, R.hy - y
+            if dx * dx + dy * dy <= 240 * 240 then
+                UnitDamageTarget(u, R.hero, info.slamDamage, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+            end
+        end)
+    end
+
+    function G.onDeath()
+        if R == nil then
+            return
+        end
+        local u = GetTriggerUnit()
+        local info = R.enemies[u]
+        if info == nil then
+            if R.summons[u] then
+                R.summons[u] = nil
+            end
+            if R.images[u] then
+                -- A fallen image vanishes like Warcraft III's (no corpse).
+                R.images[u] = nil
+                G.fx(FX.mirrorImage, GetUnitX(u), GetUnitY(u), 0.8)
+                RemoveUnit(u)
+            end
+            return
+        end
+        R.enemies[u] = nil
+        R.enemyCount = R.enemyCount - 1
+        if info.stunned then
+            BlzPauseUnitEx(u, false)
+        end
+        if info.aura then
+            DestroyEffect(info.aura)
+        end
+        if R.ended then
+            return
+        end
+        R.kills = R.kills + 1
+        local x, y = GetUnitX(u), GetUnitY(u)
+        local s = R.stats
+        G.dropXp(x, y, info.xp * CFG.XP_RATE)
+        if s.killHeal > 0 then
+            G.heal(s.killHeal)
+        end
+        if s.killGold > 0 and GetRandomReal(0, 1) < s.killGold then
+            G.addGold(1)
+        end
+        local roll = GetRandomReal(0, 1)
+        if roll < 0.002 then
+            G.dropPickup('magnet', x, y, 0)
+        elseif roll < 0.014 then
+            G.dropPickup('heal', x, y, 0)
+        elseif roll < 0.07 then
+            G.dropPickup('gold', x, y, GetRandomInt(1, 3))
+        end
+        if info.elite then
+            G.dropPickup('chest', x, y, 0)
+        end
+        if info.boss then
+            G.onBossDeath(u, info, x, y)
+        end
+        if s.explode > 0 and not R.exploding then
+            R.exploding = true
+            G.fx(FX.incinerate, x, y, 0.8)
+            G.inRange(x, y, 170 * (1 + s.area), function(other)
+                G.damage(other, s.explode * (1 + s.damage), 'incinerate', false)
+            end)
+            R.exploding = false
+        end
+        R.corpses[u] = true
+        local run = R
+        G.after(3.0, function()
+            if run.corpses[u] then
+                run.corpses[u] = nil
+                RemoveUnit(u)
+            end
+        end)
+    end
+
+    function G.onBossDeath(u, info, x, y)
+        R.bosses = R.bosses + 1
+        G.fx(FX.explosion, x, y, 1.0)
+        G.dropPickup('chest', x, y, 0)
+        G.dropPickup('gold', x + 60, y, 25)
+        local item = info.boss.item
+        local chance = (R.diff.key == 'mplus' and 0.65 or 0.5) + 0.10 * Profile.perk('keen') + (info.final and 0.25 or 0)
+        if item and GetRandomReal(0, 1) < chance then
+            G.lootItem(item)
+        end
+        if R.boss == u then
+            R.boss = nil
+            for other, otherInfo in pairs(R.enemies) do
+                if otherInfo.boss then
+                    R.boss = other
+                end
+            end
+        end
+        if info.final then
+            local run = R
+            G.after(1.5, function()
+                if R == run then
+                    G.endRun(true)
+                end
+            end)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Pickups: experience gems, gold, healing runes, magnets and chests
+    ---------------------------------------------------------------------------
+    -- Boss loot. A higher item level replaces the piece you own; a duplicate
+    -- at or below it is salvaged for gold.
+    function G.lootItem(item)
+        local p = Profile.data
+        local ilvl = item.baseIlvl + R.diff.ilvl
+        local owned = p.gear[item.id]
+        local icon = gearIcon(item)
+        if owned == nil or ilvl > owned then
+            p.gear[item.id] = ilvl
+            R.loot[#R.loot + 1] = {item = item, ilvl = ilvl, previous = owned}
+            -- A new item goes into a free inventory slot by itself.
+            if owned == nil and gearSlotOf(p, item) == nil then
+                for slot = 1, INVENTORY_SIZE do
+                    if gearEquipped(p)[slot] == nil then
+                        p.inv[tostring(slot)] = item.index
+                        break
+                    end
+                end
+            end
+            local detail = 'Item level ' .. ilvl .. '  -  ' .. G.describeBlessing(item.stat, Profile.itemValue(item, ilvl))
+            if owned then
+                detail = detail .. U.col(GREEN, '  (up from ' .. owned .. ')')
+            end
+            Hud.toast(icon, 'Loot: ' .. U.col(gearHex(ilvl), item.name), detail)
+        else
+            local gold = 10 * ZONES[item.zone].tier
+            G.addGold(gold)
+            Hud.toast(icon, U.col(GREY, item.name .. ' (' .. ilvl .. ')'), 'Already owned  -  salvaged for ' .. gold .. ' gold')
+        end
+    end
+
+    function G.dropXp(x, y, value)
+        if value >= 20 then
+            G.dropPickup('xp', x, y, value, FX.gemLarge, 1.0)
+        elseif value >= 4 then
+            G.dropPickup('xp', x, y, value, FX.gemMedium, 0.75)
+        else
+            G.dropPickup('xp', x, y, value, FX.gemSmall, 0.55)
+        end
+    end
+
+    function G.dropPickup(kind, x, y, value, model, scale)
+        local list = R.pickups
+        if #list >= CFG.MAX_PICKUPS then
+            if kind == 'xp' then
+                for i = #list, 1, -1 do
+                    if list[i].kind == 'xp' then
+                        list[i].value = list[i].value + value
+                        return
+                    end
+                end
+            elseif kind == 'gold' then
+                G.addGold(value)
+                return
+            elseif kind ~= 'chest' then
+                return
+            end
+        end
+        if model == nil then
+            if kind == 'gold' then
+                model, scale = FX.coin, 0.6
+            elseif kind == 'chest' then
+                model, scale = FX.chest, 1.0
+            else
+                model, scale = FX.rune, 0.7
+            end
+        end
+        local fx = AddSpecialEffect(model, x, y)
+        BlzSetSpecialEffectScale(fx, scale or 1)
+        BlzSetSpecialEffectZ(fx, G.groundZ(x, y) + 25)
+        if kind == 'heal' then
+            BlzSetSpecialEffectColor(fx, 255, 80, 80)
+        elseif kind == 'magnet' then
+            BlzSetSpecialEffectColor(fx, 90, 170, 255)
+        end
+        list[#list + 1] = {kind = kind, x = x, y = y, value = value, fx = fx, flying = false, speed = 0}
+    end
+
+    function G.collect(p)
+        if p.kind == 'xp' then
+            G.gainXp(p.value)
+        elseif p.kind == 'gold' then
+            G.addGold(p.value)
+        elseif p.kind == 'heal' then
+            G.heal(BlzGetUnitMaxHP(R.hero) * 0.25)
+            DestroyEffect(AddSpecialEffectTarget(FX.healingWave, R.hero, 'origin'))
+        elseif p.kind == 'magnet' then
+            R.magnetUntil = R.time + 3.0
+            Hud.banner('Every gem flies to you!')
+        elseif p.kind == 'chest' then
+            G.addGold(10)
+            R.pendingChests = R.pendingChests + 1
+            G.tryOpenHand()
+        end
+    end
+
+    function G.updatePickups(dt)
+        local list = R.pickups
+        local hx, hy = R.hx, R.hy
+        local r2 = R.pickupRange * R.pickupRange
+        local magnet = R.time < R.magnetUntil
+        local i = 1
+        while i <= #list do
+            local p = list[i]
+            local dx, dy = hx - p.x, hy - p.y
+            local d2 = dx * dx + dy * dy
+            local collected = false
+            if p.flying or d2 <= r2 or (magnet and p.kind == 'xp') then
+                p.flying = true
+                p.speed = math.min(p.speed + 2600 * dt, 1500)
+                local d = math.sqrt(d2)
+                local step = p.speed * dt
+                if d <= step + 45 then
+                    collected = true
+                else
+                    p.x = p.x + dx / d * step
+                    p.y = p.y + dy / d * step
+                    BlzSetSpecialEffectPosition(p.fx, p.x, p.y, G.groundZ(p.x, p.y) + 45)
+                end
+            end
+            if collected then
+                list[i] = list[#list]
+                list[#list] = nil
+                DestroyEffect(p.fx)
+                G.collect(p)
+                if R == nil or R.ended then
+                    return
+                end
+            else
+                i = i + 1
+            end
+        end
+    end
+
+    -- The original's Vampire Survivors curve: cheap early, steeper after 20 and 40.
+    function G.xpFor(level)
+        if level < 20 then
+            return 5 + (level - 1) * 10
+        elseif level < 40 then
+            return 195 + (level - 20) * 13
+        end
+        return 455 + (level - 40) * 16
+    end
+
+    function G.gainXp(amount)
+        R.xp = R.xp + amount * (1 + R.stats.xp)
+        while R.xp >= R.xpNext do
+            R.xp = R.xp - R.xpNext
+            R.level = R.level + 1
+            R.xpNext = G.xpFor(R.level)
+            R.pendingLevels = R.pendingLevels + 1
+            DestroyEffect(AddSpecialEffectTarget(FX.levelUp, R.hero, 'origin'))
+        end
+        G.tryOpenHand()
+    end
+
+    ---------------------------------------------------------------------------
+    -- Projectiles
+    ---------------------------------------------------------------------------
+    function G.launch(p)
+        p.z = p.z or (G.groundZ(p.x, p.y) + 70)
+        p.fx = AddSpecialEffect(p.model, p.x, p.y)
+        if p.scale then
+            BlzSetSpecialEffectScale(p.fx, p.scale)
+        end
+        BlzSetSpecialEffectPosition(p.fx, p.x, p.y, p.z)
+        p.tz = p.tz or (G.groundZ(p.tx, p.ty) + 50)
+        R.projectiles[#R.projectiles + 1] = p
+    end
+
+    function G.updateProjectiles(dt)
+        local list = R.projectiles
+        local i = 1
+        while i <= #list do
+            local p = list[i]
+            if p.target and R.enemies[p.target] then
+                p.tx, p.ty = GetUnitX(p.target), GetUnitY(p.target)
+                p.tz = BlzGetUnitZ(p.target) + 50
+            else
+                p.target = nil
+            end
+            local dx, dy, dz = p.tx - p.x, p.ty - p.y, p.tz - p.z
+            local dist = math.sqrt(dx * dx + dy * dy)
+            local step = p.speed * dt
+            if dist <= step + 10 then
+                list[i] = list[#list]
+                list[#list] = nil
+                BlzSetSpecialEffectPosition(p.fx, p.tx, p.ty, p.tz)
+                DestroyEffect(p.fx)
+                if p.target then
+                    p.onHit(p.target, p.tx, p.ty)
+                end
+                if R == nil or R.ended then
+                    return
+                end
+            else
+                local f = step / dist
+                p.x = p.x + dx * f
+                p.y = p.y + dy * f
+                p.z = p.z + dz * f
+                BlzSetSpecialEffectPosition(p.fx, p.x, p.y, p.z)
+                BlzSetSpecialEffectYaw(p.fx, Atan2(dy, dx))
+                i = i + 1
+            end
+        end
+    end
+
+    -- Piercing waves travelling in a straight line.
+    function G.launchLine(p)
+        p.dx, p.dy = math.cos(p.angle), math.sin(p.angle)
+        p.left = p.range
+        p.hit = {}
+        p.trailStep = 0
+        if p.model then
+            p.fx = AddSpecialEffect(p.model, p.x, p.y)
+            BlzSetSpecialEffectYaw(p.fx, p.angle)
+            if p.scale then
+                BlzSetSpecialEffectScale(p.fx, p.scale)
+            end
+        end
+        R.lines[#R.lines + 1] = p
+    end
+
+    function G.updateLines(dt)
+        local list = R.lines
+        local i = 1
+        while i <= #list do
+            local p = list[i]
+            local step = p.speed * dt
+            p.x = p.x + p.dx * step
+            p.y = p.y + p.dy * step
+            p.left = p.left - step
+            if p.fx then
+                BlzSetSpecialEffectPosition(p.fx, p.x, p.y, G.groundZ(p.x, p.y) + 40)
+            end
+            if p.trail then
+                p.trailStep = p.trailStep + step
+                if p.trailStep >= 75 then
+                    p.trailStep = 0
+                    G.fx(p.trail, p.x, p.y, 1.0)
+                end
+            end
+            G.inRange(p.x, p.y, p.width, function(u, x, y)
+                if not p.hit[u] then
+                    p.hit[u] = true
+                    p.onHit(u, x, y)
+                end
+            end)
+            if p.left <= 0 or p.x < G.minX or p.x > G.maxX or p.y < G.minY or p.y > G.maxY then
+                list[i] = list[#list]
+                list[#list] = nil
+                if p.fx then
+                    DestroyEffect(p.fx)
+                end
+            else
+                i = i + 1
+            end
+            if R == nil or R.ended then
+                return
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Spell behaviours
+    ---------------------------------------------------------------------------
+    local CAST = {}
+
+    local function applyHitEffects(def, v, u)
+        if def.slow then
+            G.slow(u, def.slow, def.slowDur or 2.0)
+        end
+        if def.stun then
+            G.stun(u, v.stun)
+        end
+        if def.dot then
+            G.dot(u, v.dot, def.dotDur or 3.0, def.key)
+        end
+    end
+
+    function G.boltHit(def, v, u, x, y, bounces, hitSet)
+        G.damage(u, v.dmg, def.key)
+        if def.impact then
+            G.fx(def.impact, x, y, 1.0)
+        end
+        if def.splash then
+            local splash = def.splash * (1 + R.stats.area)
+            G.inRange(x, y, splash, function(other)
+                if other ~= u then
+                    G.damage(other, v.dmg * 0.5, def.key)
+                    if def.slow then
+                        G.slow(other, def.slow, def.slowDur or 2.0)
+                    end
+                end
+            end)
+            G.fx(FX.incinerate, x, y, 0.6)
+        end
+        applyHitEffects(def, v, u)
+        if def.leech then
+            G.heal(v.dmg * def.leech)
+        end
+        if bounces and bounces > 0 then
+            hitSet = hitSet or {}
+            hitSet[u] = true
+            local nextTarget = G.nearest(x, y, 450, 1, hitSet)[1]
+            if nextTarget then
+                G.launch({model = def.missile, x = x, y = y, target = nextTarget.u, tx = nextTarget.x, ty = nextTarget.y,
+                    speed = def.speed or 1000, scale = def.scale, onHit = function(nu, nx, ny)
+                        G.boltHit(def, v, nu, nx, ny, bounces - 1, hitSet)
+                    end})
+            end
+        end
+    end
+
+    CAST.bolt = function(inst, v)
+        local def = inst.def
+        local targets
+        if def.prefersBoss then
+            targets = G.priorityTargets(v.range, v.count)
+        else
+            targets = G.nearest(R.hx, R.hy, v.range, v.count)
+        end
+        if #targets == 0 then
+            return false
+        end
+        for _, t in ipairs(targets) do
+            if def.instant then
+                G.boltHit(def, v, t.u, t.x, t.y)
+            else
+                G.launch({model = def.missile, x = R.hx, y = R.hy, target = t.u, tx = t.x, ty = t.y,
+                    speed = def.speed or 1000, scale = def.scale, onHit = function(u, x, y)
+                        G.boltHit(def, v, u, x, y, def.bounce)
+                    end})
+            end
+        end
+        return true
+    end
+
+    CAST.nova = function(inst, v)
+        local def = inst.def
+        local cx, cy = R.hx, R.hy
+        if def.atTarget then
+            local t = G.nearest(R.hx, R.hy, v.range, 1)[1]
+            if t == nil then
+                return false
+            end
+            cx, cy = t.x, t.y
+            if def.key == 'blink_strike' then
+                G.fx(FX.blink, R.hx, R.hy, 1.0)
+            end
+        elseif G.countInRange(cx, cy, v.radius) == 0 then
+            return false
+        end
+        G.fx(def.fx, cx, cy, v.radius / 250)
+        if def.images then
+            G.mirrorImages(1 + math.min(3, inst.rank), v.radius)
+        end
+        G.inRange(cx, cy, v.radius, function(u)
+            G.damage(u, v.dmg, def.key)
+            applyHitEffects(def, v, u)
+        end)
+        return true
+    end
+
+    -- Bladestorm: a ring of slashes on the edge of the area, turning a little
+    -- every wave. It sits on the damage radius, so area upgrades widen it.
+    function G.bladeRing(x, y, radius, wave)
+        local n = math.max(8, math.min(24, math.floor(TWO_PI * radius / 70)))
+        local turn = wave * 0.4
+        for k = 1, n do
+            local angle = turn + TWO_PI * k / n
+            local fx = AddSpecialEffect(FX.cleave, x + math.cos(angle) * radius * 0.85, y + math.sin(angle) * radius * 0.85)
+            BlzSetSpecialEffectYaw(fx, angle + TWO_PI / 4)
+            DestroyEffect(fx)
+        end
+        G.fx(FX.mirrorImage, x, y, radius / 220)
+    end
+
+    -- Mirror Image: copies of the hero, with its full health, that fight on
+    -- their own and draw every enemy near them (G.updateEnemies) until they
+    -- die. A cast tops them up to the rank's count; living ones stay.
+    function G.mirrorImages(count, radius)
+        local alive = 0
+        for _ in pairs(R.images) do
+            alive = alive + 1
+        end
+        local id = GetUnitTypeId(R.hero)
+        local hp = BlzGetUnitMaxHP(R.hero)
+        local s = R.stats
+        local damage = (R.def.damage + s.attackBonus) * (1 + s.damage) * 0.4
+        local spin = GetRandomReal(0, TWO_PI)
+        for k = 1, count - alive do
+            local angle = spin + TWO_PI * k / (count - alive)
+            local x = U.clamp(R.hx + math.cos(angle) * radius * 0.5, G.minX, G.maxX)
+            local y = U.clamp(R.hy + math.sin(angle) * radius * 0.5, G.minY, G.maxY)
+            local u = CreateUnit(G.PLAYER, id, x, y, bj_RADTODEG * angle)
+            if u then
+                SuspendHeroXP(u, true)
+                SetUnitVertexColor(u, 150, 180, 255, 170)
+                SetUnitScale(u, R.baseScale, R.baseScale, R.baseScale)
+                BlzSetUnitMaxHP(u, math.max(1, math.floor(hp)))
+                SetWidgetLife(u, hp)
+                BlzSetUnitBaseDamage(u, math.max(1, math.floor(damage)), 0)
+                if R.paused then
+                    PauseUnit(u, true)
+                end
+                G.fx(FX.mirrorImage, x, y, 0.8)
+                R.images[u] = true
+                R.summons[u] = {key = 'mirror_image'}
+                local target = G.nearest(x, y, 1100, 1)[1]
+                if target then
+                    IssuePointOrder(u, 'attack', target.x, target.y)
+                end
+            end
+        end
+    end
+
+    -- The living image nearest to (x, y) within reach, if any.
+    function G.decoyNear(x, y, reach)
+        local best, bestD = nil, reach * reach
+        for u in pairs(R.images) do
+            local dx, dy = GetUnitX(u) - x, GetUnitY(u) - y
+            local d = dx * dx + dy * dy
+            if d < bestD and GetWidgetLife(u) > 0.405 then
+                best, bestD = u, d
+            end
+        end
+        return best
+    end
+
+    CAST.zone = function(inst, v)
+        local def = inst.def
+        local cx, cy
+        if def.onHero or def.follow then
+            if G.countInRange(R.hx, R.hy, v.radius + 60) == 0 then
+                return false
+            end
+            cx, cy = R.hx, R.hy
+        else
+            cx, cy = G.densest(v.range, v.radius)
+            if cx == nil then
+                return false
+            end
+        end
+        local run = R
+        if def.spinAnim and R.time < R.spinUntil then
+            -- Spell duration can outlast the cooldown: the spin goes on
+            -- and the next one starts when it ends.
+            return false
+        end
+        if def.spinAnim then
+            -- Bladestorm: the hero whirls (its "Attack Walk Stand Spin"
+            -- sequence) for every wave, walking or not.
+            local length = (def.delay or 0) + v.waves * (def.interval or 0.5)
+            R.spinUntil = R.time + length
+            R.spinAnim = 'attack walk stand spin'
+            G.heroAnim(R.spinAnim, length)
+        end
+        for wave = 1, v.waves do
+            G.after((def.delay or 0) + (wave - 1) * (def.interval or 0.5), function()
+                if R ~= run or R.ended then
+                    return
+                end
+                local x, y = cx, cy
+                if def.follow or def.onHero then
+                    x, y = R.hx, R.hy
+                end
+                if def.waveSound then
+                    G.sound(def.waveSound, x, y)
+                end
+                if def.strikes then
+                    local pool = {}
+                    G.inRange(x, y, v.radius, function(u, ux, uy)
+                        pool[#pool + 1] = {u, ux, uy}
+                    end)
+                    for _ = 1, math.min(v.count, #pool) do
+                        local pick = table.remove(pool, GetRandomInt(1, #pool))
+                        G.timedFx(def.fx, pick[2], pick[3], 0.8, 1.0)
+                        G.damage(pick[1], v.dmg, def.key)
+                        applyHitEffects(def, v, pick[1])
+                    end
+                    return
+                end
+                local spread = def.spread or 1
+                for _ = 1, spread do
+                    local ox, oy = x, y
+                    if spread > 1 then
+                        local angle = GetRandomReal(0, TWO_PI)
+                        local dist = GetRandomReal(0, v.radius * 0.7)
+                        ox = x + math.cos(angle) * dist
+                        oy = y + math.sin(angle) * dist
+                    end
+                    if def.spinAnim then
+                        G.bladeRing(ox, oy, v.radius, wave)
+                    elseif def.follow then
+                        G.fx(def.fx, ox, oy, v.radius / 220)
+                    else
+                        G.timedFx(def.fx, ox, oy, spread > 1 and 0.8 or v.radius / 240, 1.4)
+                    end
+                end
+                if def.follow and not def.spinAnim then
+                    G.heroSwing('attack', 0.3)
+                end
+                G.inRange(x, y, v.radius, function(u)
+                    G.damage(u, v.dmg, def.key)
+                    applyHitEffects(def, v, u)
+                end)
+            end)
+        end
+        return true
+    end
+
+    CAST.chain = function(inst, v)
+        local def = inst.def
+        local first = G.nearest(R.hx, R.hy, v.range, def.fork and v.count or 1)
+        if #first == 0 then
+            return false
+        end
+        local hz = G.groundZ(R.hx, R.hy) + 90
+        if def.fork then
+            for _, t in ipairs(first) do
+                G.lightning(def.lightning, R.hx, R.hy, hz, t.x, t.y, G.groundZ(t.x, t.y) + 50, 0.35)
+                G.damage(t.u, v.dmg, def.key)
+                if def.impact then
+                    G.fx(def.impact, t.x, t.y, 1.0)
+                end
+                if def.leech then
+                    G.heal(v.dmg * def.leech)
+                end
+            end
+            return true
+        end
+        local hit = {}
+        local fromX, fromY, fromZ = R.hx, R.hy, hz
+        local damage = v.dmg
+        local current = first[1]
+        for jump = 1, v.count + 1 do
+            local z = G.groundZ(current.x, current.y) + 50
+            G.lightning(jump == 1 and def.lightning or (def.lightning2 or def.lightning), fromX, fromY, fromZ,
+                current.x, current.y, z, 0.3)
+            G.damage(current.u, damage, def.key)
+            if def.impact then
+                G.fx(def.impact, current.x, current.y, 1.0)
+            end
+            hit[current.u] = true
+            fromX, fromY, fromZ = current.x, current.y, z
+            damage = damage * (def.falloff or 1)
+            local nextTarget = G.nearest(current.x, current.y, def.jump or 420, 1, hit)[1]
+            if nextTarget == nil then
+                break
+            end
+            current = nextTarget
+        end
+        return true
+    end
+
+    CAST.line = function(inst, v)
+        local def = inst.def
+        local t = G.nearest(R.hx, R.hy, v.range, 1)[1]
+        if t == nil then
+            return false
+        end
+        local base = Atan2(t.y - R.hy, t.x - R.hx)
+        local n = v.count
+        for k = 1, n do
+            G.launchLine({model = def.missile, trail = def.trail, scale = def.scale, x = R.hx, y = R.hy,
+                angle = base + (k - (n + 1) / 2) * 0.32, speed = def.speed or 1000, range = v.range,
+                width = (def.width or 120) * (1 + R.stats.area * 0.5), onHit = function(u)
+                    G.damage(u, v.dmg, def.key)
+                    applyHitEffects(def, v, u)
+                end})
+        end
+        return true
+    end
+
+    CAST.summon = function(inst, v)
+        local def = inst.def
+        if G.countInRange(R.hx, R.hy, 1000) == 0 then
+            return false
+        end
+        local cx, cy = R.hx, R.hy
+        if def.nearEnemy then
+            local t = G.nearest(R.hx, R.hy, 900, 1)[1]
+            if t then
+                cx, cy = t.x, t.y
+            end
+        end
+        local alive = 0
+        for _ in pairs(R.summons) do
+            alive = alive + 1
+        end
+        local n = math.min(v.count, CFG.MAX_SUMMONS - alive)
+        if n <= 0 then
+            return false
+        end
+        for k = 1, n do
+            local code
+            if def.cycleUnits then
+                code = def.units[math.fmod(k - 1, #def.units) + 1]
+            else
+                code = def.units[math.min(inst.rank, #def.units)]
+            end
+            local angle = TWO_PI * k / n
+            local x = U.clamp(cx + math.cos(angle) * 120, G.minX, G.maxX)
+            local y = U.clamp(cy + math.sin(angle) * 120, G.minY, G.maxY)
+            local u = CreateUnit(G.PLAYER, FourCC(code), x, y, 270)
+            if u == nil and code ~= def.units[1] then
+                u = CreateUnit(G.PLAYER, FourCC(def.units[1]), x, y, 270)
+            end
+            if u then
+                UnitApplyTimedLife(u, FourCC('BTLF'), v.dur)
+                BlzSetUnitBaseDamage(u, math.max(1, math.floor(v.dmg)), 0)
+                local hp = math.floor(def.hp * (1 + 0.25 * (inst.rank - 1)))
+                BlzSetUnitMaxHP(u, hp)
+                SetWidgetLife(u, hp)
+                if def.birth then
+                    G.fx(def.birth, x, y, 1.0)
+                end
+                R.summons[u] = {key = def.key, ward = def.ward}
+                local target = G.nearest(x, y, 1200, 1)[1]
+                if target and not def.ward then
+                    IssuePointOrder(u, 'attack', target.x, target.y)
+                end
+            end
+        end
+        if def.impactDamage then
+            local run = R
+            G.after(0.6, function()
+                if R ~= run or R.ended then
+                    return
+                end
+                G.inRange(cx, cy, v.radius, function(u)
+                    G.damage(u, v.impact, def.key)
+                    G.stun(u, 1.0)
+                end)
+            end)
+        end
+        return true
+    end
+
+    CAST.heal = function(inst, v)
+        local def = inst.def
+        -- Heals that also hurt fire when hurt or when a pack closes in.
+        local hurt = GetWidgetLife(R.hero) < BlzGetUnitMaxHP(R.hero) * (def.threshold or 0.8)
+        local crowded = def.dmg and def.radius and G.countInRange(R.hx, R.hy, v.radius) >= 3
+        if not hurt and not crowded then
+            return false
+        end
+        G.heal(v.heal)
+        if def.fx then
+            DestroyEffect(AddSpecialEffectTarget(def.fx, R.hero, 'origin'))
+        end
+        if def.dmg and def.radius then
+            G.inRange(R.hx, R.hy, v.radius, function(u)
+                G.damage(u, v.dmg, def.key)
+            end)
+        end
+        return true
+    end
+
+    CAST.buff = function(inst, v)
+        local def = inst.def
+        if R.buffs[def.key] then
+            return false
+        end
+        if def.trigger == 'lowhp' then
+            if GetWidgetLife(R.hero) > BlzGetUnitMaxHP(R.hero) * 0.35 then
+                return false
+            end
+        elseif G.countInRange(R.hx, R.hy, 450) < 4 then
+            return false
+        end
+        local buff = {def = def, v = v, untilT = R.time + v.dur, icon = U.spellIcon(def)}
+        if def.fx then
+            buff.fx = AddSpecialEffectTarget(def.fx, R.hero, 'origin')
+        end
+        R.buffs[def.key] = buff
+        -- Some buffs strike everything close as they begin.
+        if def.dmg and def.radius then
+            if def.burstFx then
+                G.fx(def.burstFx, R.hx, R.hy, v.radius / 250)
+            end
+            G.inRange(R.hx, R.hy, v.radius, function(u)
+                G.damage(u, v.dmg, def.key)
+                applyHitEffects(def, v, u)
+            end)
+        end
+        if def.invulnerable then
+            R.invulnUntil = math.max(R.invulnUntil, buff.untilT)
+        end
+        if def.scale then
+            local scale = R.baseScale * def.scale
+            SetUnitScale(R.hero, scale, scale, scale)
+        end
+        if def.fade then
+            -- Wind Walk: the hero turns see-through while the buff lasts.
+            SetUnitVertexColor(R.hero, 255, 255, 255, def.fade)
+        end
+        G.recomputeStats()
+        return true
+    end
+
+    function G.updateBuffs()
+        local changed = false
+        for key, buff in pairs(R.buffs) do
+            if R.time >= buff.untilT then
+                if buff.fx then
+                    DestroyEffect(buff.fx)
+                end
+                if buff.def.scale then
+                    SetUnitScale(R.hero, R.baseScale, R.baseScale, R.baseScale)
+                end
+                if buff.def.fade then
+                    SetUnitVertexColor(R.hero, 255, 255, 255, 255)
+                end
+                R.buffs[key] = nil
+                changed = true
+            end
+        end
+        if changed then
+            G.recomputeStats()
+        end
+    end
+
+    function G.updateOrbit(inst, dt)
+        local def, v = inst.def, inst.v
+        inst.orbs = inst.orbs or {}
+        local orbs = inst.orbs
+        while #orbs < v.count do
+            local fx = AddSpecialEffect(def.missile, R.hx, R.hy)
+            if def.scale then
+                BlzSetSpecialEffectScale(fx, def.scale)
+            end
+            orbs[#orbs + 1] = fx
+        end
+        while #orbs > v.count do
+            DestroyEffect(table.remove(orbs))
+        end
+        inst.angle = (inst.angle or 0) + def.speed * dt
+        if R.time >= (inst.hitsReset or 0) then
+            inst.hits = {}
+            inst.hitsReset = R.time + 6
+        end
+        local area = 1 + R.stats.area * 0.5
+        local radius = def.orbitRadius * area
+        local hitRadius = def.hitRadius * area
+        local z = G.groundZ(R.hx, R.hy) + 70
+        local n = #orbs
+        for k = 1, n do
+            local angle = inst.angle + (k - 1) * TWO_PI / n
+            local x = R.hx + math.cos(angle) * radius
+            local y = R.hy + math.sin(angle) * radius
+            BlzSetSpecialEffectPosition(orbs[k], x, y, z)
+            BlzSetSpecialEffectYaw(orbs[k], angle + 1.5708)
+            G.inRange(x, y, hitRadius, function(u)
+                if (inst.hits[u] or 0) <= R.time then
+                    inst.hits[u] = R.time + 0.5
+                    G.damage(u, v.dmg, def.key)
+                    if def.slow then
+                        G.slow(u, def.slow, 1.5)
+                    end
+                    if def.leech then
+                        G.heal(v.dmg * def.leech)
+                    end
+                end
+            end)
+        end
+    end
+
+    function G.updateAura(inst, dt)
+        local def, v = inst.def, inst.v
+        if inst.attachFx == nil and def.attach then
+            inst.attachFx = AddSpecialEffectTarget(def.attach, R.hero, 'origin')
+        end
+        -- The aura's art grows with its radius (ranks and area upgrades).
+        local scale = v.radius / def.radius
+        if inst.attachFx and inst.attachScale ~= scale then
+            inst.attachScale = scale
+            BlzSetSpecialEffectScale(inst.attachFx, scale)
+        end
+        inst.cd = inst.cd - dt
+        if inst.cd > 0 then
+            return
+        end
+        inst.cd = def.interval * (1 - R.stats.cdr * 0.5)
+        local shown = 0
+        G.inRange(R.hx, R.hy, v.radius, function(u, x, y)
+            G.damage(u, v.dmg, def.key)
+            shown = shown + 1
+            if shown <= 3 and def.fx then
+                G.fx(def.fx, x, y, 0.8)
+            end
+        end)
+    end
+
+    function G.updateSpells(dt)
+        for _, inst in ipairs(R.spells) do
+            local kind = inst.def.kind
+            if kind == 'orbit' then
+                G.updateOrbit(inst, dt)
+            elseif kind == 'aura' then
+                G.updateAura(inst, dt)
+            elseif kind ~= 'passive' then
+                inst.cd = inst.cd - dt
+                if inst.cd <= 0 then
+                    if CAST[kind](inst, inst.v) then
+                        inst.cd = inst.v.cd
+                        -- A standing hero shows the cast (Spell, Spell Slam, ...).
+                        if R and not R.ended then
+                            G.heroSwing(inst.def.anim or R.def.castAnim or 'spell', 0.5)
+                            if inst.def.sound then
+                                G.sound(inst.def.sound, R.hx, R.hy)
+                            end
+                        end
+                    else
+                        inst.cd = 0.3
+                    end
+                end
+            end
+            if R == nil or R.ended then
+                return
+            end
+        end
+    end
+
+    function G.learnSpell(key, power)
+        local inst = {def = SPELLS[key], rank = 1, power = power or 1.0, cd = 0.5}
+        R.spells[#R.spells + 1] = inst
+        R.spellByKey[key] = inst
+        G.recomputeStats()
+        return inst
+    end
+
+    function G.updateSummons()
+        for u, info in pairs(R.summons) do
+            if GetWidgetLife(u) <= 0.405 then
+                R.summons[u] = nil
+            elseif not info.ward then
+                local dx, dy = GetUnitX(u) - R.hx, GetUnitY(u) - R.hy
+                if dx * dx + dy * dy > 900 * 900 then
+                    IssuePointOrder(u, 'move', R.hx, R.hy)
+                elseif GetUnitCurrentOrder(u) == 0 then
+                    local t = G.nearest(GetUnitX(u), GetUnitY(u), 1100, 1)[1]
+                    if t then
+                        IssuePointOrder(u, 'attack', t.x, t.y)
+                    end
+                end
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Hero: movement, animation and the automatic basic attack
+    ---------------------------------------------------------------------------
+    function G.heroAnim(name, lock)
+        if R.upperAnim then
+            -- A whole-body sequence ends a swing still playing on the upper body.
+            R.upperAnim(R.hero, '')
+        end
+        SetUnitAnimation(R.hero, name)
+        R.anim = name
+        R.animLock = R.time + (lock or 0.4)
+    end
+
+    -- A swing or a cast: whole body while the hero stands. Walking, the full
+    -- sequence would plant the feet (the hero seems to stop and turn), so it
+    -- plays on the upper body only (standalone engine) or not at all.
+    function G.heroSwing(name, lock, speed)
+        if R.time < R.spinUntil then
+            return
+        end
+        if not R.moving then
+            G.heroAnim(name, lock)
+        elseif R.upperAnim then
+            R.upperAnim(R.hero, name, speed or 1.0)
+        end
+    end
+
+    function G.updateMovement(dt)
+        -- A right-click gave the hero a native order: cancel it, or the
+        -- engine moves the hero too and the two speeds add up.
+        -- (The standalone engine never starts that order: R.scriptOrders.)
+        if R.cancelOrder then
+            R.cancelOrder = false
+            if not R.scriptOrders then
+                IssueImmediateOrder(R.hero, 'stop')
+                -- Both orders reset the unit's animation: a spin picks up again.
+                if R.time < R.spinUntil then
+                    SetUnitAnimation(R.hero, R.spinAnim)
+                else
+                    R.anim = ''
+                end
+            end
+        end
+        -- The hero walks to the last right-click, like a Warcraft III unit,
+        -- or (keyboard movement, Options) while the movement keys are held.
+        local step = R.moveSpeed * dt
+        local dx, dy = 0, 0
+        if Keys.wasd() then
+            R.clickX, R.clickY = nil, nil
+            dx, dy = Keys.direction()
+        elseif R.clickX then
+            dx, dy = R.clickX - R.hx, R.clickY - R.hy
+            local dist = math.sqrt(dx * dx + dy * dy)
+            if dist <= step then
+                -- Arrives this tick.
+                step = dist
+                R.clickX, R.clickY = nil, nil
+            end
+            if dist < 1 then
+                dx, dy = 0, 0
+            end
+        end
+        R.moving = dx ~= 0 or dy ~= 0
+        if R.moving then
+            local length = math.sqrt(dx * dx + dy * dy)
+            dx, dy = dx / length, dy / length
+            local x, y = R.hx, R.hy
+            local nx, ny = x + dx * step, y + dy * step
+            if not G.walkable(nx, ny) then
+                if G.walkable(nx, y) then
+                    ny = y
+                elseif G.walkable(x, ny) then
+                    nx = x
+                else
+                    nx, ny = x, y
+                    -- Walked into a wall: drop the click target.
+                    R.clickX, R.clickY = nil, nil
+                end
+            end
+            SetUnitX(R.hero, nx)
+            SetUnitY(R.hero, ny)
+            R.hx, R.hy = nx, ny
+            -- A walking hero always faces where it goes. Starting to walk
+            -- ends a swing or a cast at once; only a spin keeps playing.
+            BlzSetUnitFacingEx(R.hero, bj_RADTODEG * Atan2(dy, dx))
+            if R.time < R.animLock and R.time >= R.spinUntil then
+                R.animLock = R.time
+            end
+        end
+        if R.time >= R.animLock then
+            local want = R.moving and 'walk' or 'stand'
+            if R.anim ~= want then
+                SetUnitAnimation(R.hero, want)
+                R.anim = want
+            end
+        end
+        if R.moving then
+            SetUnitTimeScale(R.hero, U.clamp(R.moveSpeed / R.baseMove, 0.8, 1.8))
+        else
+            SetUnitTimeScale(R.hero, 1.0)
+        end
+    end
+
+    function G.attackHit(u, x, y, damage)
+        local s = R.stats
+        G.damage(u, damage, 'attack')
+        if s.bash > 0 and GetRandomReal(0, 1) < s.bash then
+            G.stun(u, 1.0)
+            G.damage(u, s.bashDamage * (1 + s.damage), 'bash', false)
+        end
+        if s.attackSlow > 0 then
+            G.slow(u, s.attackSlow, 2.0)
+        end
+        if s.cleave > 0 then
+            G.inRange(x, y, 170 * (1 + s.area), function(other)
+                if other ~= u then
+                    G.damage(other, damage * s.cleave, 'cleave', false)
+                end
+            end)
+            if R.melee then
+                G.fx(FX.cleave, x, y, 1.0)
+            end
+        end
+    end
+
+    function G.updateAttack(dt)
+        R.attackClock = R.attackClock - dt
+        if R.attackClock > 0 then
+            return
+        end
+        local s = R.stats
+        local ranged = (not R.melee) or s.range > 0
+        local range = ranged and (math.max(R.attackRange, 600) + (R.melee and 0 or s.range)) or R.attackRange
+        local targets = G.nearest(R.hx, R.hy, range, 1 + s.multishot)
+        if #targets == 0 then
+            R.attackClock = 0.1
+            return
+        end
+        R.attackClock = R.attackCooldown / (1 + s.attackSpeed)
+        local damage = (R.def.damage + s.attackBonus) * (1 + s.damage)
+        for _, t in ipairs(targets) do
+            if ranged then
+                G.launch({model = R.missile, x = R.hx, y = R.hy, target = t.u, tx = t.x, ty = t.y, speed = R.missileSpeed,
+                    onHit = function(u, x, y)
+                        G.attackHit(u, x, y, damage)
+                    end})
+            else
+                G.attackHit(t.u, t.x, t.y, damage)
+            end
+        end
+        -- Attacks never stop the hero. Walking, it keeps facing its way and
+        -- swings with the upper body (or, without that, a slash marks a melee
+        -- hit); standing, it turns to its target and swings. A spin
+        -- (Bladestorm) is never cut short.
+        if R.moving then
+            if R.time < R.spinUntil then
+                return
+            end
+            if R.upperAnim then
+                G.heroSwing('attack', 0, 1 + s.attackSpeed)
+            elseif R.melee and s.cleave <= 0 then
+                G.fx(FX.cleave, targets[1].x, targets[1].y, 0.8)
+            end
+        elseif R.time >= R.spinUntil then
+            local t = targets[1]
+            BlzSetUnitFacingEx(R.hero, bj_RADTODEG * Atan2(t.y - R.hy, t.x - R.hx))
+            G.heroAnim('attack', math.min(ranged and 0.5 or 0.65, R.attackClock))
+        end
+    end
+
+    function G.updateHero(dt)
+        local s = R.stats
+        local life = GetWidgetLife(R.hero)
+        if s.regen > 0 and life > 0.405 then
+            SetWidgetLife(R.hero, math.min(BlzGetUnitMaxHP(R.hero), life + s.regen * dt))
+        end
+        local invulnerable = R.time < R.invulnUntil
+        if invulnerable ~= R.invulnerable then
+            R.invulnerable = invulnerable
+            SetUnitInvulnerable(R.hero, invulnerable)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Run lifecycle
+    ---------------------------------------------------------------------------
+    function G.setPaused(paused)
+        R.paused = paused
+        for u in pairs(R.enemies) do
+            PauseUnit(u, paused)
+        end
+        for u in pairs(R.summons) do
+            PauseUnit(u, paused)
+        end
+        PauseUnit(R.hero, paused)
+        Hud.showWorldFrames(not paused)
+    end
+
+    function G.tryOpenHand()
+        if R == nil or R.ended or R.hand then
+            return
+        end
+        if R.pendingChests > 0 then
+            R.pendingChests = R.pendingChests - 1
+            Cards.open('chest')
+        elseif R.pendingLevels > 0 then
+            R.pendingLevels = R.pendingLevels - 1
+            Cards.open('level')
+        end
+    end
+
+    function G.tick()
+        if R == nil or R.ended or R.paused then
+            return
+        end
+        local dt = CFG.TICK
+        R.time = R.time + dt
+        R.hx, R.hy = GetUnitX(R.hero), GetUnitY(R.hero)
+        if GetWidgetLife(R.hero) <= 0.405 then
+            G.endRun(false)
+            return
+        end
+        G.refreshEnemyCache()
+        G.runScheduled()
+        if R == nil or R.ended or R.paused then
+            return
+        end
+        G.updateMovement(dt)
+        G.updateHero(dt)
+        G.updateProjectiles(dt)
+        if R == nil or R.ended then
+            return
+        end
+        G.updateLines(dt)
+        if R == nil or R.ended then
+            return
+        end
+        G.updateAttack(dt)
+        G.updateSpells(dt)
+        if R == nil or R.ended then
+            return
+        end
+        G.updatePickups(dt)
+        if R == nil or R.ended then
+            return
+        end
+        R.slowClock = R.slowClock - dt
+        if R.slowClock <= 0 then
+            R.slowClock = 0.25
+            G.updateEnemies()
+            G.updateBuffs()
+            if R == nil or R.ended then
+                return
+            end
+        end
+        R.summonClock = R.summonClock - dt
+        if R.summonClock <= 0 then
+            R.summonClock = 1.0
+            G.updateSummons()
+        end
+        G.updateSpawns(dt)
+        R.hudClock = R.hudClock - dt
+        if R.hudClock <= 0 then
+            R.hudClock = 0.1
+            Hud.update()
+        end
+    end
+
+    function G.readWeapon(u)
+        local range, missile, speed = 100, '', 1000
+        if UNIT_WEAPON_RF_ATTACK_RANGE ~= nil then
+            local ok, value = pcall(BlzGetUnitWeaponRealField, u, UNIT_WEAPON_RF_ATTACK_RANGE, 0)
+            if ok and type(value) == 'number' then
+                range = value
+            end
+        end
+        if UNIT_WEAPON_SF_ATTACK_PROJECTILE_ART ~= nil then
+            local ok, value = pcall(BlzGetUnitWeaponStringField, u, UNIT_WEAPON_SF_ATTACK_PROJECTILE_ART, 0)
+            if ok and type(value) == 'string' then
+                missile = value
+            end
+        end
+        if UNIT_WEAPON_RF_ATTACK_PROJECTILE_SPEED ~= nil then
+            local ok, value = pcall(BlzGetUnitWeaponRealField, u, UNIT_WEAPON_RF_ATTACK_PROJECTILE_SPEED, 0)
+            if ok and type(value) == 'number' and value > 0 then
+                speed = value
+            end
+        end
+        return range, missile, speed, BlzGetUnitAttackCooldown(u, 0)
+    end
+
+    -- Weapon types in common.j order (WEAPON_TYPE_WHOKNOWS = 0 is silent).
+    local WEAPON_TYPES = {'METAL_LIGHT_CHOP', 'METAL_MEDIUM_CHOP', 'METAL_HEAVY_CHOP', 'METAL_LIGHT_SLICE',
+        'METAL_MEDIUM_SLICE', 'METAL_HEAVY_SLICE', 'METAL_MEDIUM_BASH', 'METAL_HEAVY_BASH', 'METAL_MEDIUM_STAB',
+        'METAL_HEAVY_STAB', 'WOOD_LIGHT_SLICE', 'WOOD_MEDIUM_SLICE', 'WOOD_HEAVY_SLICE', 'WOOD_LIGHT_BASH',
+        'WOOD_MEDIUM_BASH', 'WOOD_HEAVY_BASH', 'WOOD_LIGHT_STAB', 'WOOD_MEDIUM_STAB', 'CLAW_LIGHT_SLICE',
+        'CLAW_MEDIUM_SLICE', 'CLAW_HEAVY_SLICE', 'AXE_MEDIUM_CHOP', 'ROCK_HEAVY_BASH'}
+
+    -- The unit's weapon sound as a weapontype, for UnitDamageTarget.
+    function G.readWeaponType(u)
+        if UNIT_WEAPON_IF_ATTACK_WEAPON_SOUND ~= nil then
+            local ok, value = pcall(BlzGetUnitWeaponIntegerField, u, UNIT_WEAPON_IF_ATTACK_WEAPON_SOUND, 0)
+            if ok and type(value) == 'number' and WEAPON_TYPES[value] then
+                return _G['WEAPON_TYPE_' .. WEAPON_TYPES[value]] or WEAPON_TYPE_WHOKNOWS
+            end
+        end
+        return WEAPON_TYPE_WHOKNOWS
+    end
+
+    -- The spell a hero starts with: the one picked in the lobby, else its default.
+    function G.startSpell(hero)
+        local key = hero.pool[Profile.data.starts[hero.id] or 0]
+        if key and SPELLS[key] then
+            return key
+        end
+        return hero.start
+    end
+
+    function G.startRun()
+        if Engine.active() and not G.inArena then
+            -- Standalone engine: the menu map loads the zone's own map first.
+            Engine.enterZone()
+            return
+        end
+        local def = HEROES[S.heroIndex]
+        local zone = ZONES[S.zone]
+        Lobby.hide()
+        R = {def = def, zone = zone, zoneIndex = S.zone, diff = G.difficulty(S.difficulty, S.keyLevel), diffIndex = S.difficulty,
+            time = 0, paused = false, ended = false, level = 1, xp = 0, xpNext = G.xpFor(1),
+            kills = 0, gold = 0, bosses = 0, damageDone = 0, damageTaken = 0,
+            spells = {}, spellByKey = {}, blessings = {}, blessingOrder = {}, buffs = {}, banished = {},
+            enemies = {}, enemyCount = 0, elist = {}, ex = {}, ey = {}, en = 0,
+            summons = {}, corpses = {}, pickups = {}, projectiles = {}, lines = {}, fx = {}, lightnings = {}, sched = {},
+            meter = {}, loot = {}, pendingLevels = 0, pendingChests = 0, hand = nil, handsDealt = 0,
+            rerolls = CFG.BASE_REROLLS + Profile.perk('rerolls'), banishes = CFG.BASE_BANISHES + Profile.perk('banish'),
+            livesUsed = 0, invulnUntil = 0, invulnerable = false, magnetUntil = 0, tagCount = 0,
+            attackClock = 0.5, spawnClock = 1.0, slowClock = 0, summonClock = 1.0, hudClock = 0,
+            rings = 0, finalAt = nil, nextElite = 75, nextBoss = 1, finalSpawned = false, boss = nil,
+            moving = false, anim = '', animLock = 0, spinUntil = 0, images = {}}
+
+        G.playMusic(zone.music)
+        local f = zone.fog
+        SetTerrainFogEx(0, f[4], f[5], 0.5, f[1], f[2], f[3])
+        SetFloatGameState(GAME_STATE_TIME_OF_DAY, zone.time)
+
+        local hero = CreateUnit(G.PLAYER, FourCC(def.id), G.cx, G.cy, 270)
+        if hero == nil then
+            hero = CreateUnit(G.PLAYER, FourCC('Hamg'), G.cx, G.cy, 270)
+        end
+        R.hero = hero
+        R.hx, R.hy = G.cx, G.cy
+        local range, missile, speed, cooldown = G.readWeapon(hero)
+        R.melee = range <= 250
+        R.attackRange = R.melee and 230 or U.clamp(range, 550, 700)
+        R.missile = missile ~= '' and missile or FX.arcane
+        R.missileSpeed = U.clamp(speed, 700, 1500)
+        R.attackCooldown = U.clamp(cooldown * 0.6, 0.7, 1.3)
+        R.weaponType = G.readWeaponType(hero)
+        -- Movement and attacks are scripted, so the native ones go away. This
+        -- is what lets the hero attack while walking.
+        UnitRemoveAbility(hero, FourCC('Aatk'))
+        UnitRemoveAbility(hero, FourCC('Amov'))
+        -- Standalone engine: right-clicks only report the point (no native
+        -- walk that resets the animation and needs a stop), and swings and
+        -- casts can play on the upper body while the legs keep walking.
+        local scriptOrders = rawget(_G, 'EngineUnitScriptOrders')
+        if Engine.active() and type(scriptOrders) == 'function' then
+            scriptOrders(hero, true)
+            R.scriptOrders = true
+        end
+        local upper = rawget(_G, 'EngineUnitUpperAnimation')
+        if Engine.active() and type(upper) == 'function' then
+            R.upperAnim = upper
+        end
+        SuspendHeroXP(hero, true)
+        UnitModifySkillPoints(hero, -GetHeroSkillPoints(hero))
+        R.baseMove = U.clamp(GetUnitDefaultMoveSpeed(hero), 260, 330)
+        R.baseScale = 1.0
+        if UNIT_RF_SCALING_VALUE ~= nil then
+            local ok, scale = pcall(BlzGetUnitRealField, hero, UNIT_RF_SCALING_VALUE)
+            if ok and type(scale) == 'number' and scale > 0 then
+                R.baseScale = scale
+            end
+        end
+
+        G.recomputeStats()
+        local start = G.startSpell(def)
+        G.learnSpell(start, 1.0)
+        Profile.data.codex[start] = 1
+        if Engine.active() then
+            -- Test aid: +set survivor_spells "thunder_clap mirror_image" adds spells.
+            for key in tostring(EngineCvar('survivor_spells') or ''):gmatch('[a-z_]+') do
+                if SPELLS[key] and R.spellByKey[key] == nil then
+                    G.learnSpell(key, 1.0)
+                end
+            end
+        end
+        SetWidgetLife(hero, BlzGetUnitMaxHP(hero))
+
+        EnableSelect(true, true)
+        SelectUnitForPlayerSingle(hero, G.PLAYER)
+        EnableSelect(false, false)
+        ResetToGameCamera(0)
+        SetCameraTargetController(hero, 0, 0, false)
+        SetCameraField(CAMERA_FIELD_TARGET_DISTANCE, CFG.CAMERA_DISTANCE, 0)
+        SetCameraField(CAMERA_FIELD_ANGLE_OF_ATTACK, 304, 0)
+        SetCameraField(CAMERA_FIELD_ROTATION, 90, 0)
+        SetCameraField(CAMERA_FIELD_ZOFFSET, 0, 0)
+        SetCameraField(CAMERA_FIELD_FARZ, 5000, 0)
+
+        for _ = 1, 4 do
+            local x, y = G.spawnPoint(550, 750)
+            G.createEnemy(G.pickEnemyType(), x, y, {})
+        end
+        Hud.show()
+        Hud.banner(U.col(GOLD, zone.name) .. '  -  ' .. zone.subtitle .. '  -  ' .. U.col(R.diff.hex, R.diff.name))
+    end
+
+    function G.endRun(victory)
+        if R == nil or R.ended then
+            return
+        end
+        R.ended = true
+        R.victory = victory
+        if R.hand then
+            R.hand = nil
+            Cards.hide()
+        end
+        for u in pairs(R.enemies) do
+            PauseUnit(u, true)
+        end
+        for u in pairs(R.summons) do
+            PauseUnit(u, true)
+        end
+        PauseUnit(R.hero, true)
+        Hud.showWorldFrames(false)
+
+        local p = Profile.data
+        local gold = math.floor(R.gold * R.diff.reward + 0.5)
+        if victory then
+            gold = gold + math.floor(50 * R.zone.tier * R.diff.reward)
+        end
+        R.goldEarned = gold
+        p.gold = p.gold + gold
+        p.goldTotal = p.goldTotal + gold
+        p.kills = p.kills + R.kills
+        p.bosses = p.bosses + R.bosses
+        p.runs = p.runs + 1
+        p.bestLevel = math.max(p.bestLevel, R.level)
+        if victory then
+            local _, factionIndex = U.factionOf(R.def)
+            p.wins = p.wins + 1
+            Profile.inc(p.zoneWins, R.zoneIndex)
+            Profile.inc(p.heroWins, R.def.id)
+            Profile.inc(p.factionWins, factionIndex)
+            Profile.inc(p.diffWins, R.diffIndex)
+            p.unlocked = math.max(p.unlocked, math.min(#ZONES, R.zoneIndex + 1))
+            local zoneKey = tostring(R.zoneIndex)
+            local best = p.zoneBest[zoneKey]
+            if best == nil or R.time < best then
+                p.zoneBest[zoneKey] = math.floor(R.time)
+            end
+            p.zoneDiff[zoneKey] = math.max(p.zoneDiff[zoneKey] or 0, R.diff.index)
+            -- Keystone timer: the faster the final boss falls, the bigger the upgrade.
+            if R.diff.key == 'mplus' then
+                local taken = R.time - (R.finalAt or CFG.RUN_LENGTH)
+                R.keyUpgrade = 0
+                for _, chest in ipairs(KEY_CHESTS) do
+                    if taken <= chest[1] then
+                        R.keyUpgrade = chest[2]
+                        break
+                    end
+                end
+                if R.keyUpgrade > 0 then
+                    p.keyBest[zoneKey] = math.max(p.keyBest[zoneKey] or 0, R.diff.level)
+                    p.keyMax[zoneKey] = math.max(p.keyMax[zoneKey] or 2, R.diff.level + R.keyUpgrade)
+                end
+            end
+        end
+        R.newAchievements = Profile.checkAchievements()
+        Profile.save()
+        Finale.show()
+    end
+
+    function G.cleanup()
+        if R == nil then
+            return
+        end
+        for u, info in pairs(R.enemies) do
+            if info.aura then
+                DestroyEffect(info.aura)
+            end
+            RemoveUnit(u)
+        end
+        for u in pairs(R.corpses) do
+            RemoveUnit(u)
+        end
+        for u in pairs(R.summons) do
+            RemoveUnit(u)
+        end
+        for _, p in ipairs(R.pickups) do
+            DestroyEffect(p.fx)
+        end
+        for _, p in ipairs(R.projectiles) do
+            DestroyEffect(p.fx)
+        end
+        for _, p in ipairs(R.lines) do
+            if p.fx then
+                DestroyEffect(p.fx)
+            end
+        end
+        for _, inst in ipairs(R.spells) do
+            if inst.orbs then
+                for _, fx in ipairs(inst.orbs) do
+                    DestroyEffect(fx)
+                end
+            end
+            if inst.attachFx then
+                DestroyEffect(inst.attachFx)
+            end
+        end
+        for _, buff in pairs(R.buffs) do
+            if buff.fx then
+                DestroyEffect(buff.fx)
+            end
+        end
+        for fx in pairs(R.fx) do
+            DestroyEffect(fx)
+        end
+        for bolt in pairs(R.lightnings) do
+            DestroyLightning(bolt)
+        end
+        for u in pairs(R.images) do
+            RemoveUnit(u)
+        end
+        RemoveUnit(R.hero)
+        R = nil
+        Hud.hide()
+        Cards.hide()
+        Finale.hide()
+    end
+
+
+    local SOURCE_NAMES = {attack = 'Auto Attack', thorns = 'Thorns', revive = 'Second Chance'}
+    local function sourceName(key)
+        if SOURCE_NAMES[key] then
+            return SOURCE_NAMES[key]
+        end
+        local def = SPELLS[key]
+        return def and def.name or key
+    end
+
+    ---------------------------------------------------------------------------
+    -- In-run HUD
+    ---------------------------------------------------------------------------
+    -- Frame-space x of the visible screen's left and right edges. Reforged
+    -- shows the 4:3 area; the engine widens it with the window (vid_aspect).
+    function Hud.edges()
+        local aspect = Engine.active() and tonumber(EngineCvar('vid_aspect')) or nil
+        if aspect and aspect > 4 / 3 then
+            return 0.4 - 0.3 * aspect, 0.4 + 0.3 * aspect
+        end
+        return 0.0, 0.8
+    end
+
+    -- The HUD is built in groups pinned to a screen corner or edge; every
+    -- offset and size is multiplied by the interface size (Options, 'hud').
+    function Hud.build()
+        -- One holder made at boot keeps the HUD under the cards and menus
+        -- (frames draw in tree order) when a new interface size rebuilds it.
+        Hud.holder = Hud.holder or UI.group(UI.game)
+        local root = UI.group(Hud.holder)
+        Hud.root = root
+        local k = Options.value('hud') / 100
+        local left, right = Hud.edges()
+        Hud.builtLeft = left
+
+        -- Hero frame, top left corner: portrait, health, mana, buffs.
+        local ax, ay = left + 0.004, 0.597
+        local function tl(dx, dtop)
+            return ax + dx * k, ay + dtop * k
+        end
+        -- The panel's gold line sits about 0.006 inside its edge (0.0125
+        -- corner pieces): the portrait's frame keeps 0.0095 on every side.
+        local x, top = tl(0, 0)
+        UI.panel(root, x, top, 0.236 * k, 0.078 * k, 215)
+        x, top = tl(0.014, -0.014)
+        Hud.portrait = UI.icon(root, TEX.white, x, top, 0.05 * k)
+        Hud.portraitAt = {x, top, 0.05 * k}
+        x, top = tl(0.044, -0.052)
+        Hud.levelBox = UI.frame(root, TPL.well, x, top, 0.026 * k, 0.018 * k)
+        x, top = tl(0.046, -0.054)
+        Hud.levelText = UI.text(root, '1', x, top, 0.022 * k, 0.014 * k, 0.0085 * k, TEXT_JUSTIFY_CENTER)
+        x, top = tl(0.077, -0.008)
+        Hud.name = UI.text(root, '', x, top, 0.152 * k, 0.014 * k, 0.0095 * k)
+        x, top = tl(0.079, -0.026)
+        Hud.health = UI.bar(root, x, top, 0.146 * k, 0.012 * k, 40, 190, 50, 0.0078 * k)
+        x, top = tl(0.079, -0.044)
+        Hud.mana = UI.bar(root, x, top, 0.146 * k, 0.009 * k, 50, 90, 220, 0.0066 * k)
+        x, top = tl(0.077, -0.058)
+        Hud.lives = UI.text(root, '', x, top, 0.152 * k, 0.012 * k, 0.0078 * k)
+        Hud.buffIcons = {}
+        for i = 1, 6 do
+            x, top = tl(0.008 + (i - 1) * 0.023, -0.088)
+            local o = UI.icon(root, TEX.white, x, top, 0.019 * k)
+            UI.showIcon(o, false)
+            Hud.buffIcons[i] = o
+        end
+
+        -- Clock and boss, top center.
+        local function tc(dx, dtop)
+            return 0.4 + dx * k, 0.6 + dtop * k
+        end
+        x, top = tc(-0.1, -0.002)
+        Hud.clock = UI.text(root, '00:00', x, top, 0.2 * k, 0.03 * k, 0.022 * k, TEXT_JUSTIFY_CENTER)
+        x, top = tc(-0.15, -0.032)
+        Hud.subline = UI.text(root, '', x, top, 0.3 * k, 0.014 * k, 0.0085 * k, TEXT_JUSTIFY_CENTER)
+        x, top = tc(-0.13, -0.047)
+        Hud.bossName = UI.text(root, '', x, top, 0.26 * k, 0.013 * k, 0.009 * k, TEXT_JUSTIFY_CENTER)
+        x, top = tc(-0.11, -0.062)
+        Hud.bossBar = UI.bar(root, x, top, 0.22 * k, 0.011 * k, 200, 40, 30, 0.0075 * k)
+        Hud.bossFrames = {Hud.bossName, Hud.bossBar.back, Hud.bossBar.fill, Hud.bossBar.edge, Hud.bossBar.text}
+
+        -- Zone name, top right corner.
+        Hud.zoneLabel = UI.text(root, '', right - 0.012 - 0.2 * k, 0.597, 0.2 * k, 0.016 * k, 0.0095 * k, TEXT_JUSTIFY_RIGHT)
+
+        -- Center banner and toast.
+        x, top = tc(-0.3, -0.15)
+        Hud.bannerText = UI.text(root, '', x, top, 0.6 * k, 0.03 * k, 0.016 * k, TEXT_JUSTIFY_CENTER)
+        Hud.toastFrames = {}
+        x, top = tc(-0.145, -0.082)
+        local toast = UI.panel(root, x, top, 0.29 * k, 0.042 * k, 235)
+        x, top = tc(-0.138, -0.089)
+        Hud.toastIcon = UI.icon(root, TEX.white, x, top, 0.028 * k)
+        x, top = tc(-0.102, -0.087)
+        Hud.toastTitle = UI.text(root, '', x, top, 0.24 * k, 0.015 * k, 0.0092 * k)
+        x, top = tc(-0.102, -0.103)
+        Hud.toastText = UI.text(root, '', x, top, 0.24 * k, 0.014 * k, 0.0082 * k)
+        for _, f in ipairs({toast.bg, Hud.toastIcon.frame, Hud.toastIcon.img, Hud.toastTitle, Hud.toastText}) do
+            Hud.toastFrames[#Hud.toastFrames + 1] = f
+        end
+
+        -- Spell slots and experience bar, bottom center, close to the edge.
+        Hud.slots = {}
+        local size, gap = 0.032 * k, 0.007 * k
+        local x0 = 0.4 - (CFG.SPELL_SLOTS * size + (CFG.SPELL_SLOTS - 1) * gap) / 2
+        local slotTop = (0.03 + 0.016 + 0.034) * k
+        Hud.slotTop = slotTop
+        for i = 1, CFG.SPELL_SLOTS do
+            local sx = x0 + (i - 1) * (size + gap)
+            -- Hovering a slot shows what its spell does (Hud.spellTip).
+            local slot = UI.icon(root, TEX.white, sx, slotTop, size, nil, function()
+                Hud.spellTip(i)
+            end, Hud.hideTip)
+            slot.shade = UI.box(root, sx, slotTop, size, size, 0, 0, 0, 170)
+            slot.rank = UI.text(root, '', sx, slotTop - size + 0.011 * k, size - 0.002 * k, 0.011 * k, 0.0078 * k, TEXT_JUSTIFY_RIGHT)
+            slot.x, slot.size = sx, size
+            Hud.slots[i] = slot
+        end
+        Hud.xp = UI.bar(root, 0.4 - 0.2 * k, 0.03 * k, 0.4 * k, 0.013 * k, 120, 84, 230, 0.0082 * k)
+
+        -- Blessings and counters, bottom left corner.
+        local bx = left + 0.01
+        Hud.blessingIcons = {}
+        for i = 1, #BLESSINGS do
+            local column = math.fmod(i - 1, 9)
+            local row = (i - 1) // 9
+            local ix = bx + column * 0.022 * k
+            local itop = (0.078 - row * 0.026) * k
+            local o = UI.icon(root, TEX.white, ix, itop, 0.018 * k, nil, function()
+                Hud.blessingTip(i)
+            end, Hud.hideTip)
+            o.rank = UI.text(root, '', ix, itop - 0.009 * k, 0.018 * k, 0.009 * k, 0.0068 * k, TEXT_JUSTIFY_RIGHT)
+            UI.showIcon(o, false)
+            Hud.blessingIcons[i] = o
+        end
+        Hud.counters = UI.text(root, '', bx, 0.024 * k, 0.2 * k, 0.014 * k, 0.0088 * k)
+
+        -- Damage meter, bottom right corner: the thin plate, so the rows keep
+        -- clear of its edge (the ornate escape-menu frame is too thick here).
+        local function br(dx, dtop)
+            return right - 0.006 + dx * k, dtop * k
+        end
+        x, top = br(-0.194, 0.146)
+        UI.plate(root, x, top, 0.194 * k, 0.136 * k, 225)
+        x, top = br(-0.183, 0.136)
+        UI.text(root, U.col(GOLD, 'Damage Done'), x, top, 0.09 * k, 0.014 * k, 0.0082 * k)
+        x, top = br(-0.101, 0.136)
+        Hud.dps = UI.text(root, '', x, top, 0.09 * k, 0.014 * k, 0.0075 * k, TEXT_JUSTIFY_RIGHT)
+        Hud.meterRows = {}
+        Hud.meterW = 0.176 * k
+        local colors = {{200, 60, 50}, {60, 100, 210}, {210, 160, 50}, {80, 170, 80}, {150, 80, 210}, {130, 130, 130}}
+        for i = 1, 6 do
+            local rowTop = 0.118 - (i - 1) * 0.0165
+            local row = {}
+            x, top = br(-0.185, rowTop)
+            row.bar = UI.box(root, x, top, Hud.meterW, 0.0135 * k, colors[i][1], colors[i][2], colors[i][3], 190, TEX.barFill)
+            x, top = br(-0.181, rowTop)
+            row.name = UI.text(root, '', x, top, 0.1 * k, 0.0135 * k, 0.0072 * k)
+            x, top = br(-0.104, rowTop)
+            row.value = UI.text(root, '', x, top, 0.092 * k, 0.0135 * k, 0.0072 * k, TEXT_JUSTIFY_RIGHT)
+            Hud.meterRows[i] = row
+        end
+
+        -- Tooltip of the hovered spell slot or blessing, made last so it
+        -- draws over the rest of the HUD; Hud.showTip moves it into place.
+        local tip = {k = k, w = 0.25 * k, h = 0.1 * k}
+        tip.bg = UI.plate(root, 0, 0, tip.w, tip.h, 245)
+        tip.icon = UI.icon(root, TEX.white, 0, 0, 0.026 * k)
+        tip.title = UI.text(root, '', 0, 0, tip.w, 0.015 * k, 0.0098 * k)
+        tip.sub = UI.text(root, '', 0, 0, tip.w, 0.012 * k, 0.0074 * k)
+        tip.body = UI.text(root, '', 0, 0, tip.w, tip.h, 0.0078 * k, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        tip.frames = {tip.bg, tip.icon.frame, tip.icon.img, tip.title, tip.sub, tip.body}
+        Hud.tip = tip
+        Hud.hideTip()
+
+        BlzFrameSetVisible(root, false)
+    end
+
+    -- Shows the tooltip with its bottom-left corner at (x, bottom).
+    function Hud.showTip(x, bottom, icon, title, sub, body)
+        local tip = Hud.tip
+        local k = tip.k
+        local top = bottom + tip.h
+        local size = 0.026 * k
+        local pad = size * 0.09
+        UI.place(tip.bg, x, top, tip.w, tip.h)
+        UI.place(tip.icon.frame, x + 0.011 * k - pad, top - 0.011 * k + pad, size + pad * 2, size + pad * 2)
+        UI.place(tip.icon.img, x + 0.011 * k, top - 0.011 * k, size, size)
+        UI.place(tip.title, x + 0.046 * k, top - 0.010 * k, tip.w - 0.056 * k, 0.015 * k)
+        UI.place(tip.sub, x + 0.046 * k, top - 0.025 * k, tip.w - 0.056 * k, 0.012 * k)
+        UI.place(tip.body, x + 0.011 * k, top - 0.046 * k, tip.w - 0.022 * k, tip.h - 0.054 * k)
+        UI.setIcon(tip.icon, icon)
+        BlzFrameSetText(tip.title, title)
+        BlzFrameSetText(tip.sub, U.col(GREY, sub))
+        BlzFrameSetText(tip.body, U.col('d8cfc0', body))
+        for _, f in ipairs(tip.frames) do
+            BlzFrameSetVisible(f, true)
+        end
+    end
+
+    function Hud.hideTip()
+        if Hud.tip then
+            for _, f in ipairs(Hud.tip.frames) do
+                BlzFrameSetVisible(f, false)
+            end
+        end
+    end
+
+    -- A spell slot: its name and rank, kind and cooldown, and what it does
+    -- at its current rank and power.
+    function Hud.spellTip(i)
+        local inst = R and R.spells[i]
+        if inst == nil then
+            return
+        end
+        local def = inst.def
+        local v = inst.v or G.spellValues(def, inst.rank, inst.power, R.stats)
+        local sub = KIND_NAMES[def.kind] or ''
+        if def.kind ~= 'passive' and def.kind ~= 'orbit' and def.kind ~= 'aura' and v.cd and v.cd > 0 then
+            sub = sub .. '  -  every ' .. U.num(v.cd) .. ' s'
+        end
+        Hud.showTip(0.4 - Hud.tip.w / 2, Hud.slotTop + 0.016 * Hud.tip.k, U.spellIcon(def),
+            U.col(GOLD, def.name) .. U.col(GREY, '   rank ' .. inst.rank .. rankLimit(def.maxRank)), sub, G.describe(def, v))
+    end
+
+    function Hud.blessingTip(i)
+        local key = R and R.blessingOrder[i]
+        local entry = key and R.blessings[key]
+        if entry == nil then
+            return
+        end
+        local b = BLESSING_BY_KEY[key]
+        local k = Hud.tip.k
+        local left = Hud.edges()
+        Hud.showTip(left + 0.01, 0.094 * k, U.icon(b.code, b.icon),
+            U.col(GOLD, b.name) .. U.col(GREY, '   rank ' .. entry.rank), 'Blessing',
+            G.describeBlessing(b, entry.value))
+    end
+
+    -- A new interface size: build the HUD again in place.
+    function Hud.rebuild()
+        if Hud.root then
+            BlzDestroyFrame(Hud.root)
+        end
+        Hud.build()
+        if R then
+            Hud.show()
+            Hud.updateMeter()
+        end
+    end
+
+    function Hud.placeWorldFrames()
+        if CFG.SHOW_PORTRAIT then
+            local portrait = BlzGetOriginFrame(ORIGIN_FRAME_PORTRAIT, 0)
+            local at = Hud.portraitAt
+            UI.place(portrait, at[1] + 0.001, at[2] - 0.001, at[3] - 0.002, at[3] - 0.002)
+        end
+        if CFG.SHOW_MINIMAP then
+            local minimap = BlzGetOriginFrame(ORIGIN_FRAME_MINIMAP, 0)
+            UI.place(minimap, 0.686, 0.581, 0.106, 0.106)
+        end
+    end
+
+    function Hud.showWorldFrames(visible)
+        if CFG.SHOW_PORTRAIT then
+            BlzFrameSetVisible(BlzGetOriginFrame(ORIGIN_FRAME_PORTRAIT, 0), visible)
+        end
+        if CFG.SHOW_MINIMAP then
+            BlzFrameSetVisible(BlzGetOriginFrame(ORIGIN_FRAME_MINIMAP, 0), visible)
+        end
+    end
+
+    function Hud.show()
+        local faction = U.factionOf(R.def)
+        UI.setIcon(Hud.portrait, U.heroIcon(R.def))
+        BlzFrameSetText(Hud.name, U.col(faction.hex, R.def.name))
+        BlzFrameSetText(Hud.zoneLabel, U.col(GOLD, R.zone.name) .. U.col(GREY, '  ' .. R.diff.name))
+        BlzFrameSetText(Hud.bannerText, '')
+        for _, f in ipairs(Hud.toastFrames) do
+            BlzFrameSetVisible(f, false)
+        end
+        Hud.hideTip()
+        Hud.refreshSpells()
+        Hud.update()
+        BlzFrameSetVisible(Hud.root, true)
+        Hud.placeWorldFrames()
+        Hud.showWorldFrames(true)
+    end
+
+    function Hud.hide()
+        BlzFrameSetVisible(Hud.root, false)
+        Hud.showWorldFrames(false)
+    end
+
+    function Hud.banner(s)
+        BlzFrameSetText(Hud.bannerText, s)
+        Hud.bannerId = (Hud.bannerId or 0) + 1
+        local id = Hud.bannerId
+        TimerStart(CreateTimer(), 3.5, false, function()
+            if Hud.bannerId == id then
+                BlzFrameSetText(Hud.bannerText, '')
+            end
+            DestroyTimer(GetExpiredTimer())
+        end)
+    end
+
+    function Hud.toast(icon, title, text)
+        UI.setIcon(Hud.toastIcon, icon)
+        BlzFrameSetText(Hud.toastTitle, title)
+        BlzFrameSetText(Hud.toastText, U.col(GREY, text or ''))
+        for _, f in ipairs(Hud.toastFrames) do
+            BlzFrameSetVisible(f, true)
+        end
+        Hud.toastId = (Hud.toastId or 0) + 1
+        local id = Hud.toastId
+        TimerStart(CreateTimer(), 4.0, false, function()
+            if Hud.toastId == id then
+                for _, f in ipairs(Hud.toastFrames) do
+                    BlzFrameSetVisible(f, false)
+                end
+            end
+            DestroyTimer(GetExpiredTimer())
+        end)
+    end
+
+    function Hud.refreshSpells()
+        for i, slot in ipairs(Hud.slots) do
+            local inst = R.spells[i]
+            if inst then
+                UI.setIcon(slot, U.spellIcon(inst.def))
+                UI.frameColor(slot, 214, 170, 90)
+                BlzFrameSetText(slot.rank, U.col(GOLD, tostring(inst.rank)))
+            else
+                BlzFrameSetTexture(slot.img, TEX.white, 0, true)
+                UI.tint(slot.img, 18, 14, 10, 230)
+                UI.frameColor(slot, 90, 70, 44)
+                BlzFrameSetText(slot.rank, '')
+                BlzFrameSetVisible(slot.shade, false)
+            end
+        end
+        for i, o in ipairs(Hud.blessingIcons) do
+            local key = R.blessingOrder[i]
+            if key then
+                local b = BLESSING_BY_KEY[key]
+                UI.setIcon(o, U.icon(b.code, b.icon))
+                BlzFrameSetText(o.rank, tostring(R.blessings[key].rank))
+                UI.showIcon(o, true)
+                BlzFrameSetVisible(o.rank, true)
+            else
+                UI.showIcon(o, false)
+                BlzFrameSetVisible(o.rank, false)
+            end
+        end
+    end
+
+    function Hud.update()
+        if R == nil then
+            return
+        end
+        -- The window size reaches the script a few frames after boot, and the
+        -- window may be resized: keep the HUD pinned to the real screen edges.
+        if Hud.edges() ~= Hud.builtLeft then
+            Hud.rebuild()
+            return
+        end
+        local hero = R.hero
+        BlzFrameSetText(Hud.clock, U.col(GOLD, U.time(R.time)))
+
+        local nextBoss = R.zone.bosses[R.nextBoss]
+        if nextBoss then
+            BlzFrameSetText(Hud.subline, U.col(GREY, 'next boss in ' .. U.time(nextBoss.t - R.time) .. '  -  ' .. nextBoss.name))
+        elseif not R.finalSpawned then
+            BlzFrameSetText(Hud.subline, U.col(RED, R.zone.final.name .. ' arrives in ' .. U.time(CFG.RUN_LENGTH - R.time)))
+        elseif R.diff.key == 'mplus' then
+            -- Keystone timer: show the best upgrade still in reach.
+            local taken = R.time - (R.finalAt or CFG.RUN_LENGTH)
+            local line = U.col(RED, 'Keystone depleted') .. U.col(GREY, '  -  defeat ' .. R.zone.final.name)
+            for _, chest in ipairs(KEY_CHESTS) do
+                if taken <= chest[1] then
+                    line = U.col('ff8000', '+' .. chest[2] .. ' upgrade') .. U.col(GREY, ' if ' .. R.zone.final.name
+                        .. ' falls in ' .. U.time(chest[1] - taken))
+                    break
+                end
+            end
+            BlzFrameSetText(Hud.subline, line)
+        else
+            BlzFrameSetText(Hud.subline, U.col(RED, 'Defeat ' .. R.zone.final.name .. '!'))
+        end
+
+        local boss = R.boss
+        local showBoss = boss ~= nil and R.enemies[boss] ~= nil
+        for _, f in ipairs(Hud.bossFrames) do
+            BlzFrameSetVisible(f, showBoss)
+        end
+        if showBoss then
+            local life, maxLife = GetWidgetLife(boss), BlzGetUnitMaxHP(boss)
+            BlzFrameSetText(Hud.bossName, U.col('ff6050', GetUnitName(boss)))
+            UI.setBar(Hud.bossBar, life / maxLife, U.big(life) .. ' / ' .. U.big(maxLife))
+        end
+
+        local life, maxLife = GetWidgetLife(hero), BlzGetUnitMaxHP(hero)
+        UI.setBar(Hud.health, life / math.max(1, maxLife), U.big(math.max(0, life)) .. ' / ' .. U.big(maxLife))
+        local mana = GetUnitState(hero, UNIT_STATE_MANA) or 0
+        local maxMana = GetUnitState(hero, UNIT_STATE_MAX_MANA) or 0
+        UI.setBar(Hud.mana, maxMana > 0 and mana / maxMana or 0,
+            maxMana > 0 and (U.big(math.max(0, mana)) .. ' / ' .. U.big(maxMana)) or '')
+        BlzFrameSetText(Hud.levelText, U.col(GOLD, tostring(R.level)))
+        local livesLeft = R.stats.lives - R.livesUsed
+        local parts = {}
+        if livesLeft > 0 then
+            parts[#parts + 1] = U.col(GOLD, livesLeft .. (livesLeft == 1 and ' extra life' or ' extra lives'))
+        end
+        if R.invulnerable then
+            parts[#parts + 1] = U.col('ffe680', 'Invulnerable')
+        end
+        BlzFrameSetText(Hud.lives, table.concat(parts, '   '))
+
+        UI.setBar(Hud.xp, R.xp / R.xpNext, 'Level ' .. R.level .. '     ' .. math.floor(R.xp) .. ' / ' .. R.xpNext)
+
+        for i, slot in ipairs(Hud.slots) do
+            local inst = R.spells[i]
+            if inst then
+                local kind = inst.def.kind
+                local fraction = 0
+                if kind ~= 'passive' and kind ~= 'orbit' and kind ~= 'aura' and inst.v and inst.v.cd > 0 then
+                    fraction = U.clamp(inst.cd / inst.v.cd, 0, 1)
+                end
+                if fraction > 0.02 then
+                    BlzFrameSetVisible(slot.shade, true)
+                    BlzFrameSetSize(slot.shade, slot.size, slot.size * fraction)
+                else
+                    BlzFrameSetVisible(slot.shade, false)
+                end
+            end
+        end
+
+        local index = 0
+        for _, buff in pairs(R.buffs) do
+            index = index + 1
+            if index <= #Hud.buffIcons then
+                UI.setIcon(Hud.buffIcons[index], buff.icon)
+                UI.showIcon(Hud.buffIcons[index], true)
+            end
+        end
+        for i = index + 1, #Hud.buffIcons do
+            UI.showIcon(Hud.buffIcons[i], false)
+        end
+
+        BlzFrameSetText(Hud.counters, U.col(GREY, 'Kills ') .. U.big(R.kills) .. U.col(GREY, '    Gold ')
+            .. U.col(GOLD, U.big(R.gold)) .. U.col(GREY, '    Rerolls ') .. R.rerolls)
+
+        Hud.meterClock = (Hud.meterClock or 0) - 1
+        if Hud.meterClock <= 0 then
+            Hud.meterClock = 5
+            Hud.updateMeter()
+        end
+    end
+
+    function Hud.updateMeter()
+        local rows = {}
+        for key, amount in pairs(R.meter) do
+            rows[#rows + 1] = {key = key, amount = amount}
+        end
+        table.sort(rows, function(a, b)
+            return a.amount > b.amount
+        end)
+        local top = rows[1] and rows[1].amount or 1
+        local total = math.max(1, R.damageDone)
+        BlzFrameSetText(Hud.dps, U.col(GREY, U.big(R.damageDone / math.max(1, R.time)) .. ' dps'))
+        for i, row in ipairs(Hud.meterRows) do
+            local entry = rows[i]
+            if entry then
+                BlzFrameSetVisible(row.bar, true)
+                BlzFrameSetSize(row.bar, math.max(0.002, Hud.meterW * entry.amount / top), Hud.meterW * 0.0135 / 0.176)
+                BlzFrameSetText(row.name, i .. '. ' .. sourceName(entry.key))
+                BlzFrameSetText(row.value, U.big(entry.amount) .. U.col(GREY, ' (' .. math.floor(entry.amount / total * 100 + 0.5) .. '\037)'))
+            else
+                BlzFrameSetVisible(row.bar, false)
+                BlzFrameSetText(row.name, '')
+                BlzFrameSetText(row.value, '')
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Level-up cards
+    ---------------------------------------------------------------------------
+    local CARD_W, CARD_H, CARD_GAP = 0.165, 0.25, 0.017
+
+    local function cardPart(card, frame, dx, dtop, w, h)
+        card.parts[#card.parts + 1] = {frame, dx, dtop, w, h}
+        return frame
+    end
+
+    function Cards.buildCard(root, index)
+        local card = {parts = {}, index = index}
+        local w, h = CARD_W, CARD_H
+        -- Escape-menu frame around one dark fill; only the icon frame and the
+        -- texts carry the rarity colour. The inner gold outline lights on hover.
+        card.fill = cardPart(card, UI.box(root, 0, 0.6, w - 0.016, h - 0.016, 12, 9, 7, 245), 0.008, -0.008, w - 0.016, h - 0.016)
+        card.bg = cardPart(card, UI.frame(root, TPL.panel, 0, 0.6, w, h), 0, 0, w, h)
+        BlzFrameSetTexture(card.bg, TEX.clear, 0, true)
+        card.edge = {cardPart(card, UI.border(root, 0, 0.6, w - 0.02, h - 0.02)[1], 0.01, -0.01, w - 0.02, h - 0.02)}
+        cardPart(card, UI.frame(root, TPL.well, 0, 0.6, 0.022, 0.022), 0.014, -0.014, 0.022, 0.022)
+        card.badge = cardPart(card, UI.text(root, tostring(index), 0, 0.6, 0.022, 0.022, 0.01, TEXT_JUSTIFY_CENTER), 0.014, -0.014, 0.022, 0.022)
+        card.iconFrame = cardPart(card, UI.box(root, 0, 0.6, 0.064, 0.064, 255, 255, 255, 255, TEX.iconFrame), w / 2 - 0.032, -0.03, 0.064, 0.064)
+        card.icon = cardPart(card, UI.image(root, TEX.white, 0, 0.6, 0.054, 0.054), w / 2 - 0.027, -0.035, 0.054, 0.054)
+        card.rarityText = cardPart(card, UI.text(root, '', 0, 0.6, w, 0.012, 0.0074, TEXT_JUSTIFY_CENTER), 0, -0.097, w, 0.012)
+        card.name = cardPart(card, UI.text(root, '', 0, 0.6, w - 0.02, 0.02, 0.0135, TEXT_JUSTIFY_CENTER), 0.01, -0.108, w - 0.02, 0.02)
+        card.sub = cardPart(card, UI.text(root, '', 0, 0.6, w, 0.012, 0.0085, TEXT_JUSTIFY_CENTER), 0, -0.128, w, 0.012)
+        card.desc = cardPart(card, UI.text(root, '', 0, 0.6, w - 0.042, 0.064, 0.0084, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP), 0.021, -0.146, w - 0.042, 0.064)
+        card.foot = cardPart(card, UI.text(root, '', 0, 0.6, w, 0.014, 0.0076, TEXT_JUSTIFY_CENTER), 0, -0.212, w, 0.014)
+        card.hit = cardPart(card, UI.hit(root, 0, 0.6, w, h, function()
+            Cards.pick(index)
+        end, function()
+            card.hover = true
+            Cards.paintCard(card)
+        end, function()
+            card.hover = false
+            Cards.paintCard(card)
+        end), 0, 0, w, h)
+        card.banish = UI.button(root, 0, 0.6, 0.074, 0.022, '', function()
+            Cards.banish(index)
+        end, 'red', 0.0085)
+        return card
+    end
+
+    function Cards.build()
+        local root = UI.group(UI.game)
+        Cards.root = root
+        UI.box(root, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 205)
+        Cards.pill = UI.box(root, 0.36, 0.536, 0.08, 0.02, 255, 210, 122, 255)
+        Cards.pillText = UI.text(root, '', 0.36, 0.536, 0.08, 0.02, 0.0095, TEXT_JUSTIFY_CENTER)
+        Cards.title = UI.text(root, '', 0.15, 0.512, 0.5, 0.05, 0.032, TEXT_JUSTIFY_CENTER)
+        UI.ornament(root, 0.4, 0.457, 0.2)
+        Cards.subtitle = UI.text(root, '', 0.12, 0.438, 0.56, 0.016, 0.0095, TEXT_JUSTIFY_CENTER)
+        Cards.cards = {}
+        for i = 1, 4 do
+            Cards.cards[i] = Cards.buildCard(root, i)
+        end
+        UI.text(root, U.col(GREY, 'S P E L L S'), 0.13, 0.113, 0.07, 0.024, 0.0078)
+        Cards.slots = {}
+        for i = 1, CFG.SPELL_SLOTS do
+            Cards.slots[i] = UI.icon(root, TEX.white, 0.2 + (i - 1) * 0.03, 0.112, 0.024)
+        end
+        Cards.skip = UI.button(root, 0.4, 0.118, 0.11, 0.032, '', function()
+            Cards.skipHand()
+        end, 'dark', 0.0105)
+        Cards.reroll = UI.button(root, 0.52, 0.118, 0.11, 0.032, '', function()
+            Cards.rerollHand()
+        end, 'dark', 0.0105)
+        BlzFrameSetVisible(root, false)
+    end
+
+    function Cards.moveCard(card, x, top)
+        for _, part in ipairs(card.parts) do
+            UI.place(part[1], x + part[2], top + part[3], part[4], part[5])
+        end
+        UI.moveButton(card.banish, x + (CARD_W - 0.074) / 2, top - CARD_H - 0.01, 0.074, 0.022)
+    end
+
+    function Cards.showCard(card, visible)
+        for _, part in ipairs(card.parts) do
+            BlzFrameSetVisible(part[1], visible)
+        end
+        UI.showButton(card.banish, visible)
+    end
+
+    function Cards.paintCard(card)
+        UI.edgeTint(card.edge, 214, 170, 90, card.hover and 255 or 90)
+        local lit = card.hover and 255 or 205
+        UI.tint(card.bg, lit, lit, lit, 255)
+    end
+
+    function Cards.rollRarity(minimum)
+        local luck = R.stats.luck
+        local weights, total = {}, 0
+        for i, rarity in ipairs(RARITY) do
+            local w = rarity.weight
+            if i >= 3 then
+                w = w * (1 + luck)
+            end
+            if i < (minimum or 1) then
+                w = 0
+            end
+            weights[i] = w
+            total = total + w
+        end
+        local roll = GetRandomReal(0, total)
+        for i, w in ipairs(weights) do
+            roll = roll - w
+            if roll <= 0 and w > 0 then
+                return i
+            end
+        end
+        return #RARITY
+    end
+
+    function Cards.options(exclude)
+        local list = {}
+        local slotsFree = #R.spells < CFG.SPELL_SLOTS
+        for _, key in ipairs(R.def.pool) do
+            if not R.banished[key] and not exclude[key] and SPELLS[key] then
+                local inst = R.spellByKey[key]
+                if inst then
+                    if inst.def.maxRank == nil or inst.rank < inst.def.maxRank then
+                        list[#list + 1] = {type = 'spell', key = key, w = 4}
+                    end
+                elseif slotsFree then
+                    list[#list + 1] = {type = 'spell', key = key, w = #R.spells < 3 and 7 or 3}
+                end
+            end
+        end
+        for _, b in ipairs(BLESSINGS) do
+            if not R.banished[b.key] and not exclude[b.key] then
+                list[#list + 1] = {type = 'blessing', key = b.key, w = 1.6}
+            end
+        end
+        return list
+    end
+
+    function Cards.draw(count, exclude, minimum)
+        local options = Cards.options(exclude or {})
+        local picked = {}
+        for _ = 1, count do
+            local total = 0
+            for _, o in ipairs(options) do
+                total = total + o.w
+            end
+            if total <= 0 then
+                break
+            end
+            local roll = GetRandomReal(0, total)
+            local chosen = #options
+            for index, o in ipairs(options) do
+                roll = roll - o.w
+                if roll <= 0 then
+                    chosen = index
+                    break
+                end
+            end
+            local o = table.remove(options, chosen)
+            picked[#picked + 1] = {type = o.type, key = o.key, rarity = Cards.rollRarity(minimum)}
+            Profile.data.codex[o.key] = 1
+        end
+        if #picked == 0 then
+            picked = {{type = 'gold', key = 'gold', rarity = 1}, {type = 'heal', key = 'heal', rarity = 1}}
+        end
+        return picked
+    end
+
+    function Cards.open(kind)
+        local size = CFG.HAND_SIZE
+        if Profile.perk('wide') > 0 or (R.handsDealt == 0 and Profile.perk('opening') > 0) then
+            size = 4
+        end
+        R.handsDealt = R.handsDealt + 1
+        local minimum = kind == 'chest' and 3 or 1
+        R.hand = {kind = kind, size = size, minimum = minimum, cards = Cards.draw(size, nil, minimum)}
+        G.setPaused(true)
+        Cards.render()
+        BlzFrameSetVisible(Cards.root, true)
+    end
+
+    function Cards.hide()
+        if Cards.root then
+            BlzFrameSetVisible(Cards.root, false)
+        end
+    end
+
+    function Cards.fill(card, c)
+        local rarity = RARITY[c.rarity]
+        card.rarityIndex = c.rarity
+        local r, g, b = rarity.rgb[1], rarity.rgb[2], rarity.rgb[3]
+        UI.tint(card.iconFrame, r, g, b, 255)
+        BlzFrameSetText(card.rarityText, U.col(rarity.hex, (rarity.name:upper():gsub('(.)', '\0371 '))))
+        local icon, name, sub, desc, foot
+        if c.type == 'spell' then
+            local def = SPELLS[c.key]
+            local inst = R.spellByKey[c.key]
+            local rank = inst and inst.rank + 1 or 1
+            local power = (inst and inst.power or 1) + rarity.bonus
+            local v = G.spellValues(def, rank, power, R.stats)
+            icon = U.spellIcon(def)
+            name = def.name
+            if inst then
+                sub = 'Rank ' .. inst.rank .. '  >  ' .. rank
+                foot = 'Rank ' .. rank .. rankLimit(def.maxRank)
+            else
+                sub = def.kind == 'passive' and 'New passive' or 'New spell'
+                foot = 'Takes a spell slot  -  ' .. (#R.spells + 1) .. '/' .. CFG.SPELL_SLOTS
+            end
+            desc = G.describe(def, v)
+        elseif c.type == 'blessing' then
+            local def = BLESSING_BY_KEY[c.key]
+            local current = R.blessings[c.key]
+            local amount = def.per * (1 + rarity.bonus)
+            icon = U.icon(def.code, def.icon)
+            name = def.name
+            sub = 'Blessing'
+            desc = G.describeBlessing(def, amount)
+            if current then
+                desc = desc .. '\n' .. U.col(GREY, 'Total: ') .. G.describeBlessing(def, current.value + amount)
+            end
+            foot = 'No spell slot  -  rank ' .. (current and current.rank + 1 or 1)
+        elseif c.type == 'gold' then
+            icon, name, sub = U.icon('pghe', 'BTNChestOfGold'), 'Purse of Gold', 'Nothing left to learn'
+            desc, foot = 'Take ' .. U.col('ffffff', '25') .. ' gold.', ''
+        else
+            icon, name, sub = U.icon('AHhb', 'BTNHolyBolt'), 'Second Wind', 'Nothing left to learn'
+            desc, foot = 'Restore ' .. U.col('ffffff', '40\037') .. ' of your health.', ''
+        end
+        BlzFrameSetTexture(card.icon, icon, 0, true)
+        BlzFrameSetText(card.name, U.col(rarity.hex, name))
+        BlzFrameSetText(card.sub, U.col(GREY, sub))
+        BlzFrameSetText(card.desc, U.col('d8cfc0', desc))
+        BlzFrameSetText(card.foot, U.col(GREY, foot))
+        Cards.paintCard(card)
+    end
+
+    function Cards.render()
+        local hand = R.hand
+        local n = #hand.cards
+        if hand.kind == 'chest' then
+            BlzFrameSetText(Cards.pillText, U.col('140f0a', 'T R E A S U R E'))
+            BlzFrameSetText(Cards.title, U.col(GOLD, 'Cache Opened!'))
+            BlzFrameSetText(Cards.subtitle, U.col(GREY, 'A cache of power. Every card in it is rare or better.'))
+        else
+            BlzFrameSetText(Cards.pillText, U.col('140f0a', 'L E V E L  ' .. R.level))
+            BlzFrameSetText(Cards.title, U.col(GOLD, 'Level Up!'))
+            BlzFrameSetText(Cards.subtitle, U.col(GREY, 'Choose a card. Its rarity decides how strong it is.'))
+        end
+        local total = n * CARD_W + (n - 1) * CARD_GAP
+        local x0 = 0.4 - total / 2
+        for i, card in ipairs(Cards.cards) do
+            local c = hand.cards[i]
+            if c then
+                Cards.moveCard(card, x0 + (i - 1) * (CARD_W + CARD_GAP), 0.415)
+                Cards.fill(card, c)
+                Cards.showCard(card, true)
+                local canBanish = R.banishes > 0 and (c.type == 'spell' or c.type == 'blessing')
+                UI.showButton(card.banish, R.banishes > 0)
+                UI.setLabel(card.banish, 'Banish  (' .. R.banishes .. ')')
+                UI.setEnabled(card.banish, canBanish)
+            else
+                Cards.showCard(card, false)
+            end
+        end
+        for i, slot in ipairs(Cards.slots) do
+            local inst = R.spells[i]
+            if inst then
+                UI.setIcon(slot, U.spellIcon(inst.def))
+            else
+                BlzFrameSetTexture(slot.img, TEX.white, 0, true)
+                UI.tint(slot.img, 18, 14, 10, 230)
+            end
+        end
+        local canSkip = Profile.perk('skip') > 0
+        UI.showButton(Cards.skip, canSkip)
+        UI.setLabel(Cards.skip, 'Skip  ' .. U.col(GOLD, '+' .. (10 + R.level) .. ' gold'))
+        UI.setLabel(Cards.reroll, 'Reroll  ' .. R.rerolls .. U.col(GREY, '  [' .. Keys.label('reroll') .. ']'))
+        UI.setEnabled(Cards.reroll, R.rerolls > 0)
+    end
+
+    function G.applyCard(c)
+        local bonus = RARITY[c.rarity].bonus
+        if c.type == 'spell' then
+            local inst = R.spellByKey[c.key]
+            if inst then
+                inst.rank = inst.rank + 1
+                inst.power = inst.power + bonus
+            else
+                G.learnSpell(c.key, 1 + bonus)
+            end
+        elseif c.type == 'blessing' then
+            local b = R.blessings[c.key]
+            if b == nil then
+                b = {rank = 0, value = 0}
+                R.blessings[c.key] = b
+                R.blessingOrder[#R.blessingOrder + 1] = c.key
+            end
+            b.rank = b.rank + 1
+            b.value = b.value + BLESSING_BY_KEY[c.key].per * (1 + bonus)
+        elseif c.type == 'gold' then
+            G.addGold(25)
+        elseif c.type == 'heal' then
+            G.heal(BlzGetUnitMaxHP(R.hero) * 0.4)
+        end
+        G.recomputeStats()
+    end
+
+    function Cards.closeHand()
+        R.hand = nil
+        BlzFrameSetVisible(Cards.root, false)
+        Hud.refreshSpells()
+        Hud.update()
+        if R.pendingLevels > 0 or R.pendingChests > 0 then
+            G.tryOpenHand()
+        else
+            G.setPaused(false)
+        end
+    end
+
+    function Cards.pick(index)
+        if R == nil or R.hand == nil or R.ended then
+            return
+        end
+        local c = R.hand.cards[index]
+        if c == nil then
+            return
+        end
+        G.applyCard(c)
+        Cards.closeHand()
+    end
+
+    function Cards.rerollHand()
+        if R == nil or R.hand == nil or R.rerolls <= 0 then
+            return
+        end
+        R.rerolls = R.rerolls - 1
+        R.hand.cards = Cards.draw(R.hand.size, nil, R.hand.minimum)
+        Cards.render()
+    end
+
+    function Cards.banish(index)
+        if R == nil or R.hand == nil or R.banishes <= 0 then
+            return
+        end
+        local c = R.hand.cards[index]
+        if c == nil or (c.type ~= 'spell' and c.type ~= 'blessing') then
+            return
+        end
+        R.banishes = R.banishes - 1
+        R.banished[c.key] = true
+        local exclude = {}
+        for _, other in ipairs(R.hand.cards) do
+            exclude[other.key] = true
+        end
+        local replacement = Cards.draw(1, exclude, R.hand.minimum)[1]
+        if replacement and (replacement.type == 'spell' or replacement.type == 'blessing') then
+            R.hand.cards[index] = replacement
+        elseif #R.hand.cards > 1 then
+            table.remove(R.hand.cards, index)
+        else
+            R.hand.cards[index] = replacement
+        end
+        Cards.render()
+    end
+
+    function Cards.skipHand()
+        if R == nil or R.hand == nil or Profile.perk('skip') <= 0 then
+            return
+        end
+        G.addGold(10 + R.level)
+        Cards.closeHand()
+    end
+
+    ---------------------------------------------------------------------------
+    -- End of run
+    ---------------------------------------------------------------------------
+    function Finale.build()
+        local root = UI.group(UI.game)
+        Finale.root = root
+        UI.box(root, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 190)
+        UI.panel(root, 0.14, 0.555, 0.52, 0.47, 245)
+        Finale.title = UI.text(root, '', 0.17, 0.528, 0.46, 0.045, 0.03, TEXT_JUSTIFY_CENTER)
+        UI.ornament(root, 0.4, 0.478, 0.22)
+        Finale.subtitle = UI.text(root, '', 0.17, 0.468, 0.46, 0.016, 0.0095, TEXT_JUSTIFY_CENTER)
+        UI.rule(root, 'RUN', 0.176, 0.44, 0.212, 0.011)
+        Finale.statsLeft = UI.text(root, '', 0.186, 0.414, 0.11, 0.14, 0.009, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        Finale.statsRight = UI.text(root, '', 0.27, 0.414, 0.108, 0.14, 0.009, TEXT_JUSTIFY_RIGHT, TEXT_JUSTIFY_TOP)
+        UI.rule(root, 'REWARDS', 0.412, 0.44, 0.212, 0.011)
+        Finale.rewards = UI.text(root, '', 0.422, 0.414, 0.196, 0.05, 0.009, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        Finale.lootIcons = {}
+        for i = 1, 5 do
+            local o = UI.icon(root, TEX.white, 0.426 + (i - 1) * 0.036, 0.356, 0.028)
+            o.ilvl = UI.text(root, '', 0.422 + (i - 1) * 0.036, 0.325, 0.036, 0.011, 0.0068, TEXT_JUSTIFY_CENTER)
+            Finale.lootIcons[i] = o
+        end
+        Finale.achievements = UI.text(root, '', 0.422, 0.31, 0.196, 0.07, 0.0085, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        UI.rule(root, 'DAMAGE', 0.176, 0.27, 0.448, 0.011)
+        Finale.meter = UI.text(root, '', 0.196, 0.246, 0.408, 0.074, 0.0085, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        Finale.camp = UI.button(root, 0.205, 0.163, 0.18, 0.038, U.col(GOLD, 'Return to Camp'), function()
+            if Engine.active() then
+                Engine.returnToMenu()
+                return
+            end
+            G.cleanup()
+            Lobby.show()
+        end, 'red', 0.012)
+        Finale.again = UI.button(root, 0.415, 0.163, 0.18, 0.038, 'Play Again', function()
+            G.cleanup()
+            G.startRun()
+        end, 'dark', 0.012)
+        BlzFrameSetVisible(root, false)
+    end
+
+    function Finale.show()
+        local run = R
+        if run.victory then
+            BlzFrameSetText(Finale.title, U.col('5cff7a', 'VICTORY'))
+        else
+            BlzFrameSetText(Finale.title, U.col(RED, 'DEFEAT'))
+        end
+        BlzFrameSetText(Finale.subtitle, U.col(GOLD, run.def.name) .. U.col(GREY, '  in  ') .. run.zone.name
+            .. U.col(GREY, '  -  ') .. U.col(run.diff.hex, run.diff.name))
+        BlzFrameSetText(Finale.statsLeft, U.col(GREY, 'Time\nLevel\nKills\nBosses\nDamage dealt\nDamage taken\nSpells'))
+        BlzFrameSetText(Finale.statsRight, U.time(run.time) .. '\n' .. run.level .. '\n' .. U.big(run.kills) .. '\n'
+            .. run.bosses .. '\n' .. U.big(run.damageDone) .. '\n' .. U.big(run.damageTaken) .. '\n' .. #run.spells)
+        BlzFrameSetText(Finale.rewards, U.col(GOLD, '+' .. U.big(run.goldEarned) .. ' gold') .. U.col(GREY, '  (')
+            .. U.big(Profile.data.gold) .. U.col(GREY, ' banked)') .. '\n'
+            .. (#run.loot > 0 and 'Loot:' or U.col(GREY, 'No new gear this time.')))
+        for i, o in ipairs(Finale.lootIcons) do
+            local drop = run.loot[i]
+            if drop then
+                UI.setIcon(o, gearIcon(drop.item))
+                UI.frameColor(o, 214, 170, 90)
+                BlzFrameSetText(o.ilvl, U.col(gearHex(drop.ilvl), tostring(drop.ilvl)))
+            else
+                BlzFrameSetText(o.ilvl, '')
+            end
+            UI.showIcon(o, drop ~= nil)
+        end
+        local lines = {}
+        if run.diff.key == 'mplus' then
+            if run.victory and (run.keyUpgrade or 0) > 0 then
+                lines[#lines + 1] = U.col('ff8000', 'Keystone +' .. run.diff.level .. ' timed!') .. U.col(GREEN, '  +'
+                    .. run.keyUpgrade .. '  -  up to +' .. Profile.keyMax(run.zoneIndex) .. ' is open')
+            elseif run.victory then
+                lines[#lines + 1] = U.col(RED, 'Keystone +' .. run.diff.level .. ' depleted') .. U.col(GREY, '  -  not in time')
+            end
+        end
+        for i, a in ipairs(run.newAchievements or {}) do
+            if i <= 4 then
+                lines[#lines + 1] = U.col(GOLD, 'Achievement: ') .. a.name .. U.col(GREY, '  +' .. a.points)
+            end
+        end
+        if run.victory and run.zoneIndex < #ZONES and Profile.data.unlocked > run.zoneIndex then
+            lines[#lines + 1] = U.col(GREEN, ZONES[run.zoneIndex + 1].name .. ' is open.')
+        end
+        BlzFrameSetText(Finale.achievements, table.concat(lines, '\n'))
+        local rows = {}
+        for key, amount in pairs(run.meter) do
+            rows[#rows + 1] = {key = key, amount = amount}
+        end
+        table.sort(rows, function(a, b)
+            return a.amount > b.amount
+        end)
+        local meterLines = {}
+        for i = 1, math.min(5, #rows) do
+            meterLines[#meterLines + 1] = i .. '.  ' .. sourceName(rows[i].key) .. U.col(GREY, '   ' .. U.big(rows[i].amount))
+        end
+        BlzFrameSetText(Finale.meter, table.concat(meterLines, '\n'))
+        BlzFrameSetVisible(Finale.root, true)
+    end
+
+    function Finale.hide()
+        if Finale.root then
+            BlzFrameSetVisible(Finale.root, false)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Options (Escape, in the lobby and during a run): a game menu with its
+    -- buttons stacked in one column, as in World of Warcraft. Audio, Keybinds
+    -- and Interface each open their own page in its place; Back or Escape
+    -- returns to the menu. The engine mixes each sound group by its cvar
+    -- (s_spellvolume and the rest) under s_volume, the master volume;
+    -- Reforged uses volume groups. Sliders follow an audio taper (the gain
+    -- is the square of the setting), so 10 is really quiet.
+    ---------------------------------------------------------------------------
+    local VOLUMES = {
+        {key = 'master', label = 'Master volume', cvar = 's_volume', default = 60},
+        {key = 'music', label = 'Music', cvar = 's_musicvolume'},
+        {key = 'spells', label = 'Spells', cvar = 's_spellvolume', groups = {'SOUND_VOLUMEGROUP_SPELLS'}},
+        {key = 'ambience', label = 'Ambience', cvar = 's_ambiencevolume', groups = {'SOUND_VOLUMEGROUP_AMBIENTSOUNDS'}},
+        {key = 'units', label = 'Units and enemies', cvar = 's_unitvolume',
+            groups = {'SOUND_VOLUMEGROUP_UNITSOUNDS', 'SOUND_VOLUMEGROUP_COMBAT', 'SOUND_VOLUMEGROUP_UNITMOVEMENT'}}
+    }
+    -- Slider rows and the page each sits on: the volumes, then the interface (HUD) size.
+    local OPTION_ROWS = {}
+    for _, v in ipairs(VOLUMES) do
+        v.min, v.max, v.default, v.page = 0, 100, v.default or 100, 'audio'
+        OPTION_ROWS[#OPTION_ROWS + 1] = v
+    end
+    OPTION_ROWS[#OPTION_ROWS + 1] = {key = 'hud', label = 'Interface size', min = 70, max = 140, default = 100,
+        page = 'interface'}
+    local OPTION_BY_KEY = {}
+    for _, row in ipairs(OPTION_ROWS) do
+        OPTION_BY_KEY[row.key] = row
+    end
+    local OPTION_STEP = 10
+
+    -- Every key the script listens to: {OSKEY name, key code (the OSKEY
+    -- value, a Windows virtual-key code), label}. Escape always opens the
+    -- menu; any other key can be bound to an action.
+    local KEY_ESCAPE = 27
+    local KEY_LIST = {{'ESCAPE', KEY_ESCAPE, 'Esc'}, {'SPACE', 32, 'Space'}, {'UP', 38, 'Up'}, {'DOWN', 40, 'Down'},
+        {'LEFT', 37, 'Left'}, {'RIGHT', 39, 'Right'}}
+    for c in ('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'):gmatch('.') do
+        KEY_LIST[#KEY_LIST + 1] = {c, string.byte(c), c}
+    end
+    for i = 1, 4 do
+        KEY_LIST[#KEY_LIST + 1] = {'F' .. i, 111 + i, 'F' .. i}
+    end
+    local KEY_LABEL = {}
+    for _, entry in ipairs(KEY_LIST) do
+        KEY_LABEL[entry[2]] = entry[3]
+    end
+
+    -- Rebindable actions, in the order the Keybinds page lists them. The
+    -- movement keys only walk with keyboard movement on.
+    local ACTIONS = {
+        {key = 'up', label = 'Move up', default = 87, dx = 0, dy = 1},
+        {key = 'left', label = 'Move left', default = 65, dx = -1, dy = 0},
+        {key = 'down', label = 'Move down', default = 83, dx = 0, dy = -1},
+        {key = 'right', label = 'Move right', default = 68, dx = 1, dy = 0},
+        {key = 'card1', label = 'Pick card 1', default = 49},
+        {key = 'card2', label = 'Pick card 2', default = 50},
+        {key = 'card3', label = 'Pick card 3', default = 51},
+        {key = 'card4', label = 'Pick card 4', default = 52},
+        {key = 'reroll', label = 'Reroll the cards', default = 82},
+        {key = 'play', label = 'Enter the zone (lobby)', default = 32}
+    }
+    local ACTION_BY_KEY = {}
+    for _, a in ipairs(ACTIONS) do
+        ACTION_BY_KEY[a.key] = a
+    end
+
+    -- Movement is either the mouse (right-click a point) or the keyboard
+    -- (hold the movement keys), never both.
+    function Keys.wasd()
+        return Profile.data ~= nil and Profile.data.opts.wasd == 1
+    end
+
+    function Keys.code(action)
+        return Profile.data.binds[action] or ACTION_BY_KEY[action].default
+    end
+
+    function Keys.label(action)
+        return KEY_LABEL[Keys.code(action)] or '?'
+    end
+
+    -- The four movement keys, as 'W A S D'.
+    function Keys.moveLabel()
+        return Keys.label('up') .. ' ' .. Keys.label('left') .. ' ' .. Keys.label('down') .. ' ' .. Keys.label('right')
+    end
+
+    -- Key code -> action, rebuilt whenever a binding changes.
+    function Keys.rebuild()
+        Keys.actionOf = {}
+        for _, a in ipairs(ACTIONS) do
+            Keys.actionOf[Keys.code(a.key)] = a.key
+        end
+        S.keys = {}
+    end
+
+    -- Only keys that differ from the default are saved.
+    local function storeBind(action, code)
+        if code == ACTION_BY_KEY[action].default then
+            Profile.data.binds[action] = nil
+        else
+            Profile.data.binds[action] = code
+        end
+    end
+
+    -- Binds an action to a key; the action that had the key takes the old one.
+    function Keys.bind(action, code)
+        local other = Keys.actionOf[code]
+        if other and other ~= action then
+            storeBind(other, Keys.code(action))
+        end
+        storeBind(action, code)
+        Keys.rebuild()
+    end
+
+    function Keys.reset()
+        Profile.data.binds = {}
+        Keys.rebuild()
+    end
+
+    -- Walking direction of the held movement keys (opposite keys cancel).
+    function Keys.direction()
+        local dx, dy = 0, 0
+        for _, a in ipairs(ACTIONS) do
+            if a.dx and S.keys[a.key] then
+                dx, dy = dx + a.dx, dy + a.dy
+            end
+        end
+        return dx, dy
+    end
+
+    -- A saved option in percent (Profile.data.opts), or its default.
+    function Options.value(key)
+        local row = OPTION_BY_KEY[key]
+        local value = Profile.data and Profile.data.opts[key]
+        return value and U.clamp(value, row.min, row.max) or row.default
+    end
+
+    -- A volume setting as a gain, on the audio taper.
+    function Options.gain(key)
+        local level = Options.value(key) / 100
+        return level * level
+    end
+
+    -- Pushes every saved volume to the sound system.
+    function Options.apply()
+        local master = Options.gain('master')
+        for _, v in ipairs(VOLUMES) do
+            local level = Options.gain(v.key)
+            if v.key == 'master' then
+                -- The engine scales every sound effect by s_volume; Reforged
+                -- has no master control, so each group takes it below.
+                if Engine.active() then
+                    EngineCvar(v.cvar, string.format('\037.4f', level))
+                end
+            elseif Engine.active() then
+                -- Music plays outside s_volume: the master applies here.
+                if v.groups == nil then
+                    level = level * master
+                end
+                EngineCvar(v.cvar, string.format('\037.4f', level))
+            elseif v.groups == nil then
+                SetMusicVolume(math.floor(127 * level * master + 0.5))
+            else
+                level = level * master
+                for _, name in ipairs(v.groups) do
+                    local group = rawget(_G, name)
+                    if group then
+                        VolumeGroupSetVolume(group, level)
+                    end
+                end
+            end
+        end
+    end
+
+    -- The game menu column: left edge, top, width; buttons and their step.
+    local MENU = {x = 0.3, top = 0.47, w = 0.2, bh = 0.03, step = 0.037}
+
+    -- One page of the options window: a group with its own card, shown alone.
+    local function optionsPage(root, key, x, top, w, h, title)
+        local group = UI.group(root)
+        local frame, fill = UI.card(group, x, top, w, h, title)
+        Options.pages[key] = {group = group, frame = frame, fill = fill, x = x, top = top, w = w}
+        return group
+    end
+
+    function Options.build()
+        local root = UI.group(UI.game)
+        Options.root = root
+        Options.pages = {}
+        Options.rows = {}
+        Options.page = 'main'
+        UI.box(root, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 170)
+        -- Swallows clicks meant for the screen behind. Level 0: siblings stack
+        -- by level, and at UI.hit's level 8 it lay over the pages and took
+        -- every click on their buttons.
+        BlzFrameSetLevel(UI.hit(root, -0.3, 0.6, 1.4, 0.6), 0)
+
+        -- Game menu: one column of buttons; Options.render stacks the shown ones.
+        local main = optionsPage(root, 'main', MENU.x, MENU.top, MENU.w, 0.3, 'GAME MENU')
+        local bx, bw = MENU.x + 0.024, MENU.w - 0.048
+        local function menuButton(label, onClick, style)
+            return UI.button(main, bx, MENU.top, bw, MENU.bh, label, onClick, style or 'dark', 0.0105)
+        end
+        Options.resume = menuButton('Resume', function()
+            Options.hide()
+        end)
+        Options.audio = menuButton('Audio', function()
+            Options.setPage('audio')
+        end)
+        Options.keybinds = menuButton('Keybinds', function()
+            Options.setPage('keys')
+        end)
+        Options.interface = menuButton('Interface', function()
+            Options.setPage('interface')
+        end)
+        Options.restart = menuButton('Restart Run', function()
+            Options.hide()
+            G.cleanup()
+            G.startRun()
+        end)
+        Options.menu = menuButton('Main Menu', function()
+            Options.hide()
+            if Engine.active() then
+                Engine.returnToMenu()
+                return
+            end
+            G.cleanup()
+            Lobby.show()
+        end)
+        Options.quit = menuButton(U.col(GOLD, 'Quit Game'), function()
+            Options.quitGame()
+        end, 'red')
+        -- A wider gap sets the run and quit buttons apart from the settings.
+        Options.menuButtons = {Options.resume, Options.audio, Options.keybinds, Options.interface, 'gap',
+            Options.restart, Options.menu, Options.quit}
+        Options.hint = UI.text(main, U.col(GREY, 'Esc closes this menu'), bx, MENU.top, bw, 0.012, 0.0072,
+            TEXT_JUSTIFY_CENTER)
+
+        Options.buildSliders(root, 'audio', 'AUDIO')
+        Options.buildSliders(root, 'interface', 'INTERFACE')
+        Options.buildKeys(root)
+        Options.setPage('main')
+        BlzFrameSetVisible(root, false)
+    end
+
+    -- A page of slider rows (the rows whose page is key) and a Back button.
+    function Options.buildSliders(root, key, title)
+        local list = {}
+        for _, v in ipairs(OPTION_ROWS) do
+            if v.page == key then
+                list[#list + 1] = v
+            end
+        end
+        local x, top, w = 0.24, MENU.top, 0.32
+        -- Rows, the Back button, then the hint line clear of the frame's edge.
+        local h = 0.048 + #list * 0.032 + 0.094
+        local page = optionsPage(root, key, x, top, w, h, title)
+        local ix, iw = x + 0.024, w - 0.048
+        for i, v in ipairs(list) do
+            local rowKey = v.key
+            local rowTop = top - 0.048 - (i - 1) * 0.032
+            local row = {}
+            UI.text(page, U.col('d8cfc0', v.label), ix, rowTop, 0.1, 0.024, 0.0088)
+            row.down = UI.button(page, ix + 0.102, rowTop - 0.001, 0.022, 0.022, '-', function()
+                Options.step(rowKey, -OPTION_STEP)
+            end, 'dark', 0.013)
+            row.bar = UI.bar(page, ix + 0.132, rowTop - 0.006, 0.078, 0.012, 214, 170, 90, 0.0072)
+            row.up = UI.button(page, ix + 0.218, rowTop - 0.001, 0.022, 0.022, '+', function()
+                Options.step(rowKey, OPTION_STEP)
+            end, 'dark', 0.013)
+            row.value = UI.text(page, '', ix + 0.242, rowTop, iw - 0.242, 0.024, 0.0085, TEXT_JUSTIFY_RIGHT)
+            Options.rows[rowKey] = row
+        end
+        local by = top - 0.048 - #list * 0.032 - 0.016
+        UI.button(page, ix + iw / 4, by, iw / 2, 0.03, 'Back', function()
+            Options.setPage('main')
+        end, 'dark', 0.0105)
+        UI.text(page, U.col(GREY, 'Esc returns to the menu'), ix, by - 0.038, iw, 0.012, 0.0072, TEXT_JUSTIFY_CENTER)
+    end
+
+    -- Keybinds: mouse or keyboard movement, then one row per action with
+    -- its key. Clicking a key waits for the next key pressed (G.onKey).
+    function Options.buildKeys(root)
+        local x, top, w = 0.21, 0.55, 0.38
+        local rowH = 0.025
+        local h = 0.106 + (#ACTIONS + 1) * rowH + 0.09
+        local page = optionsPage(root, 'keys', x, top, w, h, 'KEYBINDS')
+        local ix, iw = x + 0.024, w - 0.048
+        local t = top - 0.048
+        UI.text(page, U.col('d8cfc0', 'Movement'), ix, t, 0.09, 0.026, 0.0088)
+        local mw = (iw - 0.098) / 2
+        Options.mouseMode = UI.button(page, ix + 0.09, t, mw, 0.026, 'Mouse', function()
+            Options.setMovement(false)
+        end, 'tab', 0.0092)
+        Options.keyMode = UI.button(page, ix + 0.098 + mw, t, mw, 0.026, 'Keyboard', function()
+            Options.setMovement(true)
+        end, 'tab', 0.0092)
+        t = t - 0.03
+        Options.modeHint = UI.text(page, '', ix, t, iw, 0.018, 0.0072, TEXT_JUSTIFY_CENTER)
+        t = t - 0.028
+        Options.binds = {}
+        local kw = 0.1
+        for _, a in ipairs(ACTIONS) do
+            local action = a.key
+            local row = {}
+            row.label = UI.text(page, '', ix, t, iw - kw, rowH - 0.003, 0.0085)
+            row.key = UI.button(page, ix + iw - kw, t, kw, rowH - 0.003, '', function()
+                Options.waiting = action
+                Options.renderKeys()
+            end, 'dark', 0.009)
+            Options.binds[action] = row
+            t = t - rowH
+        end
+        UI.text(page, U.col('6e665c', 'Options menu'), ix, t, iw - kw, rowH - 0.003, 0.0085)
+        UI.setEnabled(UI.button(page, ix + iw - kw, t, kw, rowH - 0.003, 'Esc', nil, 'dark', 0.009), false)
+        t = t - rowH - 0.014
+        local bw = (iw - 0.012) / 2
+        UI.button(page, ix, t, bw, 0.03, 'Reset to Defaults', function()
+            Options.waiting = nil
+            Keys.reset()
+            Options.changedKeys()
+        end, 'dark', 0.0098)
+        UI.button(page, ix + bw + 0.012, t, bw, 0.03, 'Back', function()
+            Options.setPage('main')
+        end, 'dark', 0.0105)
+        Options.keysHint = UI.text(page, '', ix, t - 0.036, iw, 0.012, 0.0072, TEXT_JUSTIFY_CENTER)
+    end
+
+    function Options.setPage(key)
+        Options.page = key
+        Options.waiting = nil
+        for name, p in pairs(Options.pages) do
+            BlzFrameSetVisible(p.group, name == key)
+        end
+        Options.render()
+    end
+
+    function Options.setMovement(wasd)
+        Profile.data.opts.wasd = wasd and 1 or 0
+        if R then
+            R.clickX, R.clickY = nil, nil
+        end
+        Options.changedKeys()
+    end
+
+    -- The key pressed while a binding waits for one (Escape cancels).
+    function Options.capture(code)
+        local action = Options.waiting
+        Options.waiting = nil
+        if action and code ~= KEY_ESCAPE then
+            Keys.bind(action, code)
+        end
+        Options.changedKeys()
+    end
+
+    function Options.changedKeys()
+        Options.renderKeys()
+        Lobby.updateFooter()
+    end
+
+    function Options.step(key, delta)
+        local row = OPTION_BY_KEY[key]
+        Profile.data.opts[key] = U.clamp(Options.value(key) + delta, row.min, row.max)
+        if key == 'hud' then
+            Hud.rebuild()
+        else
+            Options.apply()
+        end
+        Options.render()
+    end
+
+    function Options.renderKeys()
+        local wasd = Keys.wasd()
+        UI.setActive(Options.mouseMode, not wasd)
+        UI.setActive(Options.keyMode, wasd)
+        BlzFrameSetText(Options.modeHint, U.col(GREY, wasd
+            and ('Hold ' .. Keys.moveLabel() .. ' to walk. Right-clicks do not move the hero.')
+            or 'Right-click the ground to walk there. The movement keys do nothing.'))
+        for _, a in ipairs(ACTIONS) do
+            local row = Options.binds[a.key]
+            local waiting = Options.waiting == a.key
+            BlzFrameSetText(row.label, U.col((a.dx and not wasd) and '6e665c' or 'd8cfc0', a.label))
+            UI.setLabel(row.key, waiting and U.col('ffffff', 'Press a key') or Keys.label(a.key))
+            UI.setActive(row.key, waiting)
+        end
+        BlzFrameSetText(Options.keysHint, U.col(GREY, Options.waiting and 'Press the new key. Esc cancels.'
+            or 'Click a key to change it. Esc returns to the menu.'))
+    end
+
+    function Options.render()
+        for _, v in ipairs(OPTION_ROWS) do
+            local row = Options.rows[v.key]
+            local value = Options.value(v.key)
+            UI.setBar(row.bar, (value - v.min) / (v.max - v.min))
+            BlzFrameSetText(row.value, value == 0 and U.col(GREY, 'Off') or (value .. '\037'))
+            UI.setEnabled(row.down, value > v.min)
+            UI.setEnabled(row.up, value < v.max)
+        end
+        -- In the lobby there is no run to restart or leave: Close, the
+        -- settings and Quit. The window shrinks to the shown buttons.
+        local inRun = R ~= nil and not R.ended
+        UI.setLabel(Options.resume, inRun and 'Resume' or 'Close')
+        UI.showButton(Options.restart, inRun)
+        UI.showButton(Options.menu, inRun)
+        local p = Options.pages.main
+        local bx, bw = p.x + 0.024, p.w - 0.048
+        local top = p.top - 0.05
+        for _, b in ipairs(Options.menuButtons) do
+            if b == 'gap' then
+                top = top - 0.01
+            elseif b.visible then
+                UI.moveButton(b, bx, top, bw, MENU.bh)
+                top = top - MENU.step
+            end
+        end
+        UI.place(Options.hint, bx, top - 0.004, bw, 0.012)
+        UI.sizeCard(p.frame, p.fill, p.x, p.top, p.w, p.top - top + 0.04)
+        Options.renderKeys()
+    end
+
+    function Options.show()
+        Options.open = true
+        if R and not R.ended then
+            G.setPaused(true)
+        end
+        Options.setPage('main')
+        BlzFrameSetVisible(Options.root, true)
+    end
+
+    function Options.hide()
+        Options.open = false
+        Options.waiting = nil
+        BlzFrameSetVisible(Options.root, false)
+        Profile.save()
+        -- A level-up hand keeps the run paused until a card is picked.
+        if R and not R.ended and not R.hand then
+            G.setPaused(false)
+        end
+    end
+
+    -- Escape: a settings page returns to the game menu, the game menu closes.
+    function Options.toggle()
+        if not Options.open then
+            Options.show()
+        elseif Options.page ~= 'main' then
+            Options.setPage('main')
+        else
+            Options.hide()
+        end
+    end
+
+    function Options.quitGame()
+        Profile.save()
+        local quit = rawget(_G, 'EngineQuit')
+        if type(quit) == 'function' then
+            quit()
+        else
+            EndGame(false)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Lobby
+    ---------------------------------------------------------------------------
+    local TABS = {
+        {key = 'character', label = 'Character'},
+        {key = 'collection', label = 'Armory'},
+        {key = 'codex', label = 'Codex'},
+        {key = 'talents', label = 'Talents'},
+        {key = 'achievements', label = 'Achievements'},
+        {key = 'rewards', label = 'Rewards'}
+    }
+
+    local TIER_HEX = {'e6e6e6', '1eff00', '0070dd', 'a335ee', 'ff8000', 'e6cc80'}
+    local TIER_NAME = {'Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'}
+
+    -- Lobby layout. The engine draws the whole widescreen window, so the menu
+    -- spans 0.96 of frame width there (it fits 16:10 and 16:9); Reforged keeps
+    -- the 4:3 area from 0 to 0.8. Every page sits between LAY.top and LAY.bottom.
+    local LAY = {}
+
+    function LAY.init()
+        local wide = Engine.active()
+        LAY.wide = wide
+        LAY.x0 = wide and -0.08 or 0.0
+        LAY.x1 = wide and 0.88 or 0.8
+        LAY.w = LAY.x1 - LAY.x0
+        LAY.top = 0.53
+        LAY.bottom = 0.104
+        LAY.h = LAY.top - LAY.bottom
+        LAY.gap = 0.012
+        LAY.pad = 0.022
+        -- Character page: two side columns and the hero in the middle.
+        LAY.side = wide and 0.29 or 0.24
+        LAY.mid = LAY.w - 2 * LAY.side - 2 * LAY.gap
+        LAY.center = LAY.x0 + LAY.side + LAY.gap
+        LAY.right = LAY.x1 - LAY.side
+        -- Other pages: a main panel and a details panel on the right.
+        LAY.mainW = LAY.w - LAY.side - LAY.gap
+        -- Achievements and rewards: a narrow summary column on the left.
+        LAY.summary = wide and 0.24 or 0.2
+    end
+
+    local function heroesOf(factionKey)
+        local list = {}
+        for index, hero in ipairs(HEROES) do
+            if hero.faction == factionKey then
+                list[#list + 1] = index
+            end
+        end
+        return list
+    end
+
+    -- Plain vertical gradient over the whole window: the world stays hidden
+    -- behind the menu. One warm color scaled by a single factor keeps the hue
+    -- fixed, so the 8-bit steps between strips do not show as lines.
+    function Lobby.buildBackground(root)
+        local strips = 40
+        local step = 0.6 / strips
+        for i = 0, strips - 1 do
+            local v = 1 - 0.85 * i / (strips - 1)
+            UI.box(root, -0.4, 0.6 - i * step, 1.6, step + 0.0005,
+                math.floor(46 * v + 0.5), math.floor(23 * v + 0.5), math.floor(14 * v + 0.5), 255)
+        end
+    end
+
+    function Lobby.build()
+        LAY.init()
+        local root = UI.group(UI.game)
+        Lobby.root = root
+        Lobby.pages = {}
+        Lobby.buildBackground(root)
+        if Engine.active() then
+            -- The title in the Warcraft III logo's style (tools/make_title.py,
+            -- 8:1 with room for the glow); Reforged keeps the gold text.
+            Lobby.title = UI.image(root, TEX.title, 0.24, 0.601, 0.32, 0.04)
+        else
+            Lobby.title = UI.text(root, U.col(GOLD, 'WARCRAFT SURVIVORS'), LAY.x0, 0.598, LAY.w, 0.032, 0.024, TEXT_JUSTIFY_CENTER)
+        end
+        Lobby.gold = UI.text(root, '', LAY.x1 - 0.3, 0.594, 0.3, 0.014, 0.0085, TEXT_JUSTIFY_RIGHT)
+        UI.button(root, LAY.x0, 0.596, 0.1, 0.024, 'Options  ' .. U.col(GREY, '[Esc]'), function()
+            Options.show()
+        end, 'dark', 0.0088)
+        Lobby.tabs = {}
+        local tabW, tabGap = 0.104, 0.008
+        local x0 = 0.4 - (#TABS * tabW + (#TABS - 1) * tabGap) / 2
+        for i, tab in ipairs(TABS) do
+            local key = tab.key
+            Lobby.tabs[key] = UI.button(root, x0 + (i - 1) * (tabW + tabGap), 0.563, tabW, 0.027, tab.label, function()
+                Lobby.setTab(key)
+            end, 'tab', 0.0102)
+        end
+        for _, tab in ipairs(TABS) do
+            Lobby.pages[tab.key] = UI.group(root)
+        end
+        Lobby.buildCharacter(Lobby.pages.character)
+        Lobby.buildCollection(Lobby.pages.collection)
+        Lobby.buildCodex(Lobby.pages.codex)
+        Lobby.buildTalents(Lobby.pages.talents)
+        Lobby.buildAchievements(Lobby.pages.achievements)
+        Lobby.buildRewards(Lobby.pages.rewards)
+        Lobby.buildDifficulty(root)
+        Lobby.footer = UI.text(root, '', LAY.x0, 0.029, LAY.w, 0.012, 0.0076, TEXT_JUSTIFY_CENTER)
+        Lobby.updateFooter()
+        BlzFrameSetVisible(root, false)
+    end
+
+    -- Controls line under the lobby, with the player's own keys.
+    function Lobby.updateFooter()
+        if Lobby.footer == nil then
+            return
+        end
+        local move = Keys.wasd() and (Keys.moveLabel() .. ' to move') or 'Right-click to move'
+        BlzFrameSetText(Lobby.footer, U.col(GREY, move .. '  -  attacks and spells cast themselves  -  '
+            .. Keys.label('card1') .. ' ' .. Keys.label('card2') .. ' ' .. Keys.label('card3') .. ' picks a card  -  '
+            .. Keys.label('reroll') .. ' rerolls  -  ' .. Keys.label('play') .. ' to play  -  Esc for options'))
+    end
+
+    function Lobby.setTab(key)
+        S.tab = key
+        for _, tab in ipairs(TABS) do
+            BlzFrameSetVisible(Lobby.pages[tab.key], tab.key == key)
+            UI.setActive(Lobby.tabs[tab.key], tab.key == key)
+        end
+        Lobby.refresh()
+    end
+
+    function Lobby.show()
+        S.screen = 'lobby'
+        G.playMusic({'War3XMainScreen'})
+        Hud.showWorldFrames(false)
+        BlzFrameSetVisible(Lobby.root, true)
+        Lobby.updatePreview()
+        Lobby.setTab(S.tab)
+    end
+
+    function Lobby.hide()
+        S.screen = 'run'
+        BlzFrameSetVisible(Lobby.root, false)
+    end
+
+    -- Player color of the portrait model's team-colored parts, per faction.
+    local FACTION_TEAM = {Alliance = 1, Horde = 0, Undead = 3, ['Night Elf'] = 2, Tavern = 4}
+
+    -- The hero's portrait: its own model in a frame (engine), or its icon
+    -- (Reforged, where model frames cannot be framed without the editor).
+    function Lobby.updatePreview()
+        local C = Lobby.C
+        local hero = HEROES[S.heroIndex]
+        if C.model then
+            if C.modelHero ~= hero.id then
+                C.modelHero = hero.id
+                BlzFrameSetModel(C.model, EngineUnitModel(FourCC(hero.id)), 0)
+                EngineFrameSetTeamColor(C.model, FACTION_TEAM[hero.faction] or 0)
+            end
+        elseif C.portrait then
+            BlzFrameSetTexture(C.portrait, U.heroIcon(hero), 0, true)
+        end
+    end
+
+    function Lobby.refresh()
+        BlzFrameSetText(Lobby.gold, U.col(GREY, 'Mythic+ rating ') .. U.col('ff8000', tostring(keystoneRating(Profile.data)))
+            .. U.col(GREY, '    Gold ') .. U.col(GOLD, U.big(Profile.data.gold)))
+        local points = Profile.points()
+        UI.setLabel(Lobby.tabs.rewards, points > 0 and ('Rewards ' .. U.col(GREEN, '(' .. points .. ')')) or 'Rewards')
+        local page = S.tab
+        if page == 'character' then
+            Lobby.refreshCharacter()
+        elseif page == 'collection' then
+            Lobby.refreshCollection()
+        elseif page == 'codex' then
+            Lobby.refreshCodex()
+        elseif page == 'talents' then
+            Lobby.refreshTalents()
+        elseif page == 'achievements' then
+            Lobby.refreshAchievements()
+        elseif page == 'rewards' then
+            Lobby.refreshRewards()
+        end
+    end
+
+    -- Dark inset well in the escape menu's thin gold control frame, for
+    -- stats, rows and cells. Returned as a list for UI.edgeTint.
+    local function well(page, x, top, w, h)
+        return {UI.frame(page, TPL.well, x, top, w, h)}
+    end
+
+    ---------------------------------------------------------------------------
+    -- Character tab
+    ---------------------------------------------------------------------------
+    function Lobby.buildCharacter(page)
+        local C = {}
+        Lobby.C = C
+        local P, T = LAY.pad, LAY.top
+
+        -- Heroes column: faction crests, the faction's heroes, the chosen
+        -- hero's blurb, stats and spell pool.
+        local x, w = LAY.x0, LAY.side
+        local ix, iw = x + P, w - 2 * P
+        UI.card(page, x, T, w, LAY.h, 'HEROES')
+        C.factions = {}
+        local crest = 0.028
+        local crestStep = math.min(0.046, iw / #FACTIONS)
+        local crestX = x + w / 2 - (crestStep * (#FACTIONS - 1) + crest) / 2
+        for i, faction in ipairs(FACTIONS) do
+            local key = faction.key
+            local cx = crestX + (i - 1) * crestStep
+            local o = {}
+            o.ring = UI.box(page, cx - 0.004, T - 0.038, crest + 0.008, crest + 0.008, 255, 255, 255, 0, TEX.highlight)
+            o.img = UI.image(page, TEX.emblem[key], cx, T - 0.042, crest, crest)
+            o.hit = UI.hit(page, cx, T - 0.042, crest, crest, function()
+                S.faction = key
+                local list = heroesOf(key)
+                if HEROES[S.heroIndex].faction ~= key and list[1] then
+                    S.heroIndex = list[1]
+                end
+                Lobby.updatePreview()
+                Lobby.refresh()
+            end)
+            C.factions[i] = o
+        end
+        C.factionName = UI.text(page, '', ix, T - 0.074, iw, 0.013, 0.0088, TEXT_JUSTIFY_CENTER)
+
+        C.cells = {}
+        local cellW = iw / 3
+        local size = 0.036
+        for i = 1, 9 do
+            local column = math.fmod(i - 1, 3)
+            local row = (i - 1) // 3
+            local cellX = ix + column * cellW
+            local top = T - 0.093 - row * 0.054
+            local cell = {}
+            cell.glow = UI.box(page, cellX + 0.003, top + 0.004, cellW - 0.006, 0.054, 255, 255, 255, 0, TEX.highlight)
+            cell.icon = UI.icon(page, TEX.white, cellX + (cellW - size) / 2, top, size, function()
+                if cell.heroIndex then
+                    S.heroIndex = cell.heroIndex
+                    Lobby.updatePreview()
+                    Lobby.refresh()
+                end
+            end, function()
+                cell.hover = true
+                Lobby.paintCell(cell)
+            end, function()
+                cell.hover = false
+                Lobby.paintCell(cell)
+            end)
+            cell.name = UI.text(page, '', cellX, top - size - 0.004, cellW, 0.011, 0.0072, TEXT_JUSTIFY_CENTER)
+            C.cells[i] = cell
+        end
+
+        UI.box(page, ix, T - 0.26, iw, 0.0008, 150, 112, 58, 200)
+        C.heroName = UI.text(page, '', ix, T - 0.264, iw, 0.018, 0.0135)
+        C.heroRole = UI.text(page, '', ix, T - 0.264, iw, 0.018, 0.0078, TEXT_JUSTIFY_RIGHT)
+        C.blurb = UI.text(page, '', ix, T - 0.284, iw, 0.03, 0.0078, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        C.stats = {}
+        local labels = {'HEALTH', 'ATTACK', 'STARTS WITH'}
+        local shares = {0.27, 0.27, 0.46}
+        local sx = ix
+        local sgap = 0.006
+        for i = 1, 3 do
+            local sw = (iw - 2 * sgap) * shares[i]
+            well(page, sx, T - 0.32, sw, 0.038)
+            UI.text(page, U.col(GREY, labels[i]), sx + 0.009, T - 0.328, sw - 0.018, 0.01, 0.0062)
+            C.stats[i] = UI.text(page, '', sx + 0.009, T - 0.339, sw - 0.018, 0.014, 0.009)
+            sx = sx + sw + sgap
+        end
+        UI.text(page, U.col(GREY, 'SPELL POOL  -  click one to start with it'), ix, T - 0.364, iw, 0.011, 0.0066)
+        C.pool = {}
+        local step = math.min(0.03, iw / 8)
+        local poolSize = step - 0.006
+        for i = 1, 8 do
+            local slot = i
+            -- As in Warcraft III, the hero learns the spell of the player's choice first.
+            C.pool[i] = UI.icon(page, TEX.white, ix + 0.002 + (i - 1) * step, T - 0.379, poolSize, function()
+                local hero = HEROES[S.heroIndex]
+                if hero.pool[slot] and SPELLS[hero.pool[slot]] then
+                    Profile.data.starts[hero.id] = slot
+                    Profile.save()
+                    Lobby.refresh()
+                    Lobby.showSpellInfo(hero.pool[slot])
+                end
+            end, function()
+                Lobby.showSpellInfo(HEROES[S.heroIndex].pool[slot])
+            end, function()
+                Lobby.showTraitInfo()
+            end)
+        end
+
+        -- Middle: the hero's portrait and card, then the faction or the
+        -- hovered spell.
+        x, w = LAY.center, LAY.mid
+        ix, iw = x + P, w - 2 * P
+        UI.card(page, x, T, w, LAY.h)
+        local pw, ph = LAY.wide and 0.13 or 0.105, LAY.wide and 0.16 or 0.13
+        local ptop = T - P
+        -- The iron dialog frame is a glue template the Reforged game UI does not load.
+        UI.frame(page, Engine.active() and TPL.iron or TPL.well, ix, ptop, pw, ph)
+        if Engine.active() then
+            C.model = BlzCreateFrameByType('SPRITE', UI.name(), page, '', 0)
+            UI.place(C.model, ix + 0.009, ptop - 0.009, pw - 0.018, ph - 0.018)
+        else
+            local s = pw - 0.024
+            C.portrait = UI.image(page, TEX.white, ix + 0.012, ptop - (ph - s) / 2, s, s)
+        end
+        C.showEmblem = UI.image(page, TEX.emblem.Alliance, ix + pw - 0.038, ptop - ph + 0.04, 0.026, 0.026)
+        local tx = ix + pw + 0.014
+        local tw = ix + iw - tx
+        C.showName = UI.text(page, '', tx, ptop - 0.002, tw, 0.022, 0.0165)
+        C.showLine = UI.text(page, '', tx, ptop - 0.026, tw, 0.013, 0.0085)
+        C.record = UI.text(page, '', tx, ptop - 0.042, tw, 0.012, 0.0072)
+        UI.box(page, tx, ptop - 0.062, tw, 0.0008, 150, 112, 58, 160)
+        UI.text(page, U.col(GREY, 'STARTS WITH'), tx, ptop - 0.068, tw, 0.01, 0.0062)
+        C.startIcon = UI.icon(page, TEX.white, tx + 0.002, ptop - 0.082, 0.03, nil, function()
+            Lobby.showSpellInfo(G.startSpell(HEROES[S.heroIndex]))
+        end, function()
+            Lobby.showTraitInfo()
+        end)
+        C.startName = UI.text(page, '', tx + 0.042, ptop - 0.082, tw - 0.042, 0.015, 0.0098)
+        C.startKind = UI.text(page, '', tx + 0.042, ptop - 0.098, tw - 0.042, 0.012, 0.0072)
+
+        local itop = ptop - ph - 0.014
+        local ih = itop - (LAY.bottom + P)
+        well(page, ix, itop, iw, ih)
+        C.infoIcon = UI.icon(page, TEX.white, ix + 0.012, itop - 0.012, 0.032)
+        C.infoTitle = UI.text(page, '', ix + 0.056, itop - 0.012, iw - 0.068, 0.016, 0.0115)
+        C.infoSub = UI.text(page, '', ix + 0.056, itop - 0.029, iw - 0.068, 0.012, 0.0078)
+        C.infoBody = UI.text(page, '', ix + 0.012, itop - 0.056, iw - 0.024, ih - 0.066, 0.0082, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+
+        -- Zones column: the chosen zone on top, the list below it.
+        x, w = LAY.right, LAY.side
+        ix, iw = x + P, w - 2 * P
+        UI.card(page, x, T, w, LAY.h, 'ZONE')
+        local rowStep = 0.028
+        local ctop = T - 0.044
+        local ch = LAY.h - 0.044 - P - #ZONES * rowStep - 0.006
+        well(page, ix, ctop, iw, ch)
+        -- Zone picture in its own proportions, left of the name: the arena
+        -- shot (2:1) when there is one, else the campaign art's square corner.
+        C.zoneArtX, C.zoneArtTop = ix + 0.007, ctop - 0.007
+        C.zoneArt = UI.image(page, ZONES[1].art, C.zoneArtX, C.zoneArtTop, 0.094, 0.047)
+        C.zoneArtEdge = UI.border(page, C.zoneArtX - 0.002, C.zoneArtTop + 0.002, 0.098, 0.051)
+        local tx = ix + 0.108
+        C.zoneName = UI.text(page, '', tx, ctop - 0.006, ix + iw - 0.009 - tx, 0.022, 0.016)
+        C.zoneTier = UI.text(page, '', tx, ctop - 0.006, ix + iw - 0.009 - tx, 0.022, 0.0068, TEXT_JUSTIFY_RIGHT)
+        C.zoneSub = UI.text(page, '', tx, ctop - 0.032, ix + iw - 0.009 - tx, 0.014, 0.0085)
+        C.zoneDesc = UI.text(page, '', ix + 0.009, ctop - 0.062, iw - 0.018, 0.044, 0.0074, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        C.zoneBosses = UI.text(page, '', ix + 0.009, ctop - 0.108, iw - 0.018, ch - 0.128, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        C.zoneRecord = UI.text(page, '', ix + 0.009, ctop - ch + 0.017, iw - 0.018, 0.012, 0.0068)
+        C.zoneRows = {}
+        for i, zone in ipairs(ZONES) do
+            local top = ctop - ch - 0.006 - (i - 1) * rowStep
+            local row = {}
+            row.edge = well(page, ix, top, iw, rowStep - 0.004)
+            row.glow = UI.box(page, ix + 0.003, top - 0.003, iw - 0.006, rowStep - 0.01, 255, 255, 255, 0, TEX.highlight)
+            row.name = UI.text(page, '', ix + 0.009, top, iw * 0.6, rowStep - 0.004, 0.0098)
+            row.status = UI.text(page, '', ix + iw * 0.5, top, iw * 0.5 - 0.009, rowStep - 0.004, 0.0068, TEXT_JUSTIFY_RIGHT)
+            row.hit = UI.hit(page, ix, top, iw, rowStep - 0.004, function()
+                if i <= Profile.data.unlocked then
+                    S.zone = i
+                    Lobby.clampDifficulty()
+                    Lobby.refresh()
+                end
+            end)
+            C.zoneRows[i] = row
+        end
+
+        -- Bottom row: difficulty, enter, random hero.
+        local by, bh = 0.094, 0.044
+        local ew, sw, gap = 0.3, 0.15, LAY.gap
+        local ex = 0.4 - ew / 2
+        local dx = ex - gap - sw
+        -- Opens the difficulty window (Lobby.buildDifficulty).
+        C.difficulty = UI.button(page, dx, by, sw, bh, '', function()
+            Lobby.openDifficulty()
+        end, 'dark', 0.0088)
+        C.keyHint = UI.text(page, '', dx - 0.1, by - bh - 0.003, sw + 0.2, 0.011, 0.0066, TEXT_JUSTIFY_CENTER)
+        C.enter = UI.button(page, ex, by, ew, bh, '', function()
+            G.startRun()
+        end, 'red', 0.0155)
+        UI.place(C.enter.label, ex, by - 0.004, ew, 0.022)
+        C.enterSub = UI.text(page, '', ex, by - 0.027, ew, 0.013, 0.0074, TEXT_JUSTIFY_CENTER)
+        C.random = UI.button(page, ex + ew + gap, by, sw, bh, 'Random Hero', function()
+            S.heroIndex = GetRandomInt(1, #HEROES)
+            S.faction = HEROES[S.heroIndex].faction
+            Lobby.updatePreview()
+            Lobby.refresh()
+        end, 'dark', 0.0102)
+    end
+
+    function Lobby.paintCell(cell)
+        local selected = cell.heroIndex == S.heroIndex
+        BlzFrameSetAlpha(cell.glow, selected and 170 or (cell.hover and 70 or 0))
+        if selected then
+            UI.frameColor(cell.icon, 255, 214, 120)
+        else
+            UI.frameColor(cell.icon, 120, 92, 52)
+        end
+    end
+
+    -- Keep the chosen difficulty and keystone legal for the selected zone.
+    function Lobby.clampDifficulty()
+        while S.difficulty > 1 and not Profile.difficultyOpen(S.zone, S.difficulty) do
+            S.difficulty = S.difficulty - 1
+        end
+        S.keyLevel = U.clamp(S.keyLevel, 2, Profile.keyMax(S.zone))
+    end
+
+    ---------------------------------------------------------------------------
+    -- Difficulty window, from the lobby's difficulty button: every difficulty
+    -- of the chosen zone with what it changes, how to open the locked ones,
+    -- and the keystone level for Mythic+. Done or Escape closes it.
+    ---------------------------------------------------------------------------
+    local DW = {x = 0.14, top = 0.545, w = 0.52, rowH = 0.06, step = 0.067, rows = 0.094}
+
+    function Lobby.buildDifficulty(root)
+        local D = {rows = {}, open = false}
+        Lobby.D = D
+        local group = UI.group(root)
+        -- Above the tabs and the Options button, whose hits sit at level 8 on the lobby root.
+        BlzFrameSetLevel(group, 9)
+        D.group = group
+        UI.box(group, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 170)
+        BlzFrameSetLevel(UI.hit(group, -0.3, 0.6, 1.4, 0.6), 0)
+        local x, T, w = DW.x, DW.top, DW.w
+        local n = #DIFFICULTIES
+        UI.card(group, x, T, w, DW.rows + n * DW.step + 0.062, 'DIFFICULTY')
+        local ix, iw = x + LAY.pad, w - 2 * LAY.pad
+        D.zone = UI.text(group, '', ix, T - 0.038, iw, 0.018, 0.0115, TEXT_JUSTIFY_CENTER)
+        D.intro = UI.text(group, '', ix, T - 0.058, iw, 0.03, 0.0076, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP)
+        local chipX = ix + 0.13
+        for i = 1, n do
+            local top = T - DW.rows - (i - 1) * DW.step
+            local index = i
+            local row = {}
+            row.edge = {UI.frame(group, TPL.well, ix, top, iw, DW.rowH)}
+            row.glow = UI.box(group, ix + 0.004, top - 0.004, iw - 0.008, DW.rowH - 0.008, 255, 255, 255, 0, TEX.highlight)
+            row.name = UI.text(group, '', ix + 0.014, top - 0.009, chipX - ix - 0.014, 0.024, 0.0135)
+            row.state = UI.text(group, '', ix + 0.014, top - 0.034, chipX - ix - 0.014, 0.016, 0.0074)
+            row.chips = UI.text(group, '', chipX, top - 0.009, iw - 0.24, 0.02, 0.0082)
+            row.desc = UI.text(group, '', chipX, top - 0.031, iw - 0.24, 0.024, 0.0074, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+            row.hit = UI.hit(group, ix, top, iw, DW.rowH, function()
+                Lobby.chooseDifficulty(index)
+            end)
+            D.rows[i] = row
+        end
+        -- Keystone level at the right end of the Mythic+ row, over its click area.
+        local ktop = T - DW.rows - (n - 1) * DW.step - 0.016
+        local kx = ix + iw - 0.104
+        D.keyDown = UI.button(group, kx, ktop, 0.028, 0.028, '-', function()
+            S.keyLevel = math.max(2, S.keyLevel - 1)
+            Lobby.refresh()
+        end, 'dark', 0.014)
+        D.keyText = UI.text(group, '', kx + 0.028, ktop, 0.048, 0.028, 0.0115, TEXT_JUSTIFY_CENTER)
+        D.keyUp = UI.button(group, kx + 0.076, ktop, 0.028, 0.028, '+', function()
+            S.keyLevel = math.min(Profile.keyMax(S.zone), S.keyLevel + 1)
+            Lobby.refresh()
+        end, 'dark', 0.014)
+        UI.button(group, 0.4 - 0.07, T - DW.rows - n * DW.step - 0.004, 0.14, 0.032, U.col(GOLD, 'Done'), function()
+            Lobby.closeDifficulty()
+        end, 'red', 0.0115)
+        BlzFrameSetVisible(group, false)
+    end
+
+    function Lobby.openDifficulty()
+        Lobby.D.open = true
+        BlzFrameSetVisible(Lobby.D.group, true)
+        Lobby.renderDifficulty()
+    end
+
+    function Lobby.closeDifficulty()
+        Lobby.D.open = false
+        BlzFrameSetVisible(Lobby.D.group, false)
+        Lobby.refresh()
+    end
+
+    -- A click on a row picks it when it is open; Mythic+ starts at the highest key.
+    function Lobby.chooseDifficulty(index)
+        if not Profile.difficultyOpen(S.zone, index) then
+            return
+        end
+        if DIFFICULTIES[index].key == 'mplus' and S.difficulty ~= index then
+            S.keyLevel = Profile.keyMax(S.zone)
+        end
+        S.difficulty = index
+        Lobby.refresh()
+    end
+
+    function Lobby.renderDifficulty()
+        local D = Lobby.D
+        if not (D and D.open) then
+            return
+        end
+        local zone = ZONES[S.zone]
+        local cleared = Profile.zoneDiff(S.zone)
+        BlzFrameSetText(D.zone, U.col(GOLD, zone.name) .. U.col(GREY, '  -  ' .. zone.subtitle))
+        BlzFrameSetText(D.intro, U.col('d8cfc0', 'Each difficulty opens when you win ' .. zone.name
+            .. ' on the one before it. Enemies hit harder and live longer; loot and gold grow with them.'))
+        local function mult(label, value)
+            return U.col(GREY, label .. ' ') .. U.col('ffffff', 'x' .. string.format('\037.2f', value))
+        end
+        for i, row in ipairs(D.rows) do
+            local base = DIFFICULTIES[i]
+            local d = G.difficulty(i, S.keyLevel)
+            local open = Profile.difficultyOpen(S.zone, i)
+            local selected = i == S.difficulty
+            local keystone = base.key == 'mplus'
+            BlzFrameSetText(row.name, U.col(open and base.hex or '6e665c', base.name))
+            local state = ''
+            if selected then
+                state = U.col(GOLD, 'Selected')
+            elseif not open then
+                state = U.col('6e665c', 'Locked')
+            elseif (keystone and Profile.keyBest(S.zone) > 0) or (not keystone and cleared >= i) then
+                state = U.col(GREEN, 'Cleared')
+            end
+            BlzFrameSetText(row.state, state)
+            local ilvl = 100 + 10 * (zone.tier - 1) + d.ilvl
+            BlzFrameSetText(row.chips, (keystone and U.col('ff8000', '+' .. d.level .. '  ') or '')
+                .. mult('Health', d.hp) .. '  ' .. mult('Damage', d.dmg) .. '  ' .. mult('Loot', d.reward)
+                .. '  ' .. U.col(GREY, 'ilvl ') .. U.col('ffffff', tostring(ilvl)))
+            local desc
+            if not open then
+                desc = U.col('b06a5a', 'Win ' .. zone.name .. ' on ' .. DIFFICULTIES[i - 1].name .. ' to open it.')
+            elseif keystone then
+                local best = Profile.keyBest(S.zone)
+                desc = U.col(GREY, 'No end: kill the final boss in time to open the next keys (up to +'
+                    .. Profile.keyMax(S.zone) .. ' now' .. (best > 0 and (', best timed +' .. best) or '') .. ').')
+            else
+                desc = U.col(GREY, base.blurb)
+            end
+            BlzFrameSetText(row.desc, desc)
+            BlzFrameSetAlpha(row.glow, selected and 150 or 0)
+            UI.edgeTint(row.edge, selected and 214 or 110, selected and 170 or 84, selected and 90 or 46, 255)
+            if keystone then
+                local showKey = open and selected
+                UI.showButton(D.keyDown, showKey)
+                UI.showButton(D.keyUp, showKey)
+                BlzFrameSetVisible(D.keyText, showKey)
+                BlzFrameSetText(D.keyText, U.col('ff8000', '+' .. S.keyLevel))
+                UI.setEnabled(D.keyDown, S.keyLevel > 2)
+                UI.setEnabled(D.keyUp, S.keyLevel < Profile.keyMax(S.zone))
+            end
+        end
+    end
+
+    function Lobby.showTraitInfo()
+        local C = Lobby.C
+        local hero = HEROES[S.heroIndex]
+        local faction = U.factionOf(hero)
+        BlzFrameSetTexture(C.infoIcon.img, TEX.emblem[faction.key], 0, true)
+        UI.tint(C.infoIcon.img, 255, 255, 255, 255)
+        BlzFrameSetText(C.infoTitle, U.col(faction.hex, faction.key))
+        BlzFrameSetText(C.infoSub, U.col(GOLD, faction.trait))
+        local lines = {}
+        for _, line in ipairs(faction.lines) do
+            lines[#lines + 1] = U.col(GOLD, '-  ') .. line
+        end
+        lines[#lines + 1] = ''
+        lines[#lines + 1] = U.col(GREY, 'The basic attack fires on its own, even while walking. Hover a spell to read it.')
+        BlzFrameSetText(C.infoBody, table.concat(lines, '\n'))
+    end
+
+    function Lobby.showSpellInfo(key)
+        local def = SPELLS[key]
+        if def == nil then
+            return
+        end
+        local C = Lobby.C
+        UI.setIcon(C.infoIcon, U.spellIcon(def))
+        BlzFrameSetText(C.infoTitle, U.col(GOLD, def.name))
+        BlzFrameSetText(C.infoSub, U.col(GREY, (KIND_NAMES[def.kind] or '') .. rankNote(def.maxRank)))
+        local v = G.spellValues(def, 1, 1, G.baseStats())
+        BlzFrameSetText(C.infoBody, U.col('d8cfc0', G.describe(def, v)))
+    end
+
+    function Lobby.refreshCharacter()
+        local C = Lobby.C
+        local hero = HEROES[S.heroIndex]
+        local faction = U.factionOf(hero)
+        for i, faction2 in ipairs(FACTIONS) do
+            local o = C.factions[i]
+            local selected = faction2.key == S.faction
+            BlzFrameSetAlpha(o.ring, selected and 200 or 0)
+            local v = selected and 255 or 140
+            UI.tint(o.img, v, v, v, 255)
+        end
+        local current = FACTIONS[1]
+        for _, f in ipairs(FACTIONS) do
+            if f.key == S.faction then
+                current = f
+            end
+        end
+        BlzFrameSetText(C.factionName, U.col(current.hex, current.key))
+        local list = heroesOf(S.faction)
+        for i, cell in ipairs(C.cells) do
+            local index = list[i]
+            cell.heroIndex = index
+            if index then
+                UI.setIcon(cell.icon, U.heroIcon(HEROES[index]))
+                -- Grid labels hold one line: long names use their short form.
+                local label = HEROES[index].short or HEROES[index].name
+                BlzFrameSetText(cell.name, index == S.heroIndex and U.col(GOLD, label) or label)
+                UI.showIcon(cell.icon, true)
+                BlzFrameSetVisible(cell.name, true)
+            else
+                UI.showIcon(cell.icon, false)
+                BlzFrameSetVisible(cell.name, false)
+            end
+            BlzFrameSetVisible(cell.glow, index ~= nil)
+            Lobby.paintCell(cell)
+        end
+
+        BlzFrameSetText(C.heroName, U.col(GOLD, hero.name))
+        BlzFrameSetText(C.heroRole, U.col(GREY, hero.role))
+        BlzFrameSetText(C.blurb, U.col('d8cfc0', hero.blurb))
+        local startKey = G.startSpell(hero)
+        local start = SPELLS[startKey]
+        BlzFrameSetText(C.stats[1], tostring(hero.hp))
+        BlzFrameSetText(C.stats[2], tostring(hero.damage))
+        BlzFrameSetText(C.stats[3], start.name)
+        for i, o in ipairs(C.pool) do
+            local key = hero.pool[i]
+            if key and SPELLS[key] then
+                UI.setIcon(o, U.spellIcon(SPELLS[key]))
+                local chosen = key == startKey
+                UI.frameColor(o, chosen and 255 or 130, chosen and 214 or 100, chosen and 120 or 56)
+                UI.showIcon(o, true)
+            else
+                UI.showIcon(o, false)
+            end
+        end
+
+        BlzFrameSetText(C.showName, U.col(GOLD, hero.name))
+        BlzFrameSetText(C.showLine, U.col(faction.hex, hero.faction) .. U.col(GREY, '  -  ' .. hero.role))
+        BlzFrameSetTexture(C.showEmblem, TEX.emblem[hero.faction], 0, true)
+        local p = Profile.data
+        BlzFrameSetText(C.record, U.col(GREY, 'Runs ') .. p.runs .. U.col(GREY, '    Wins ') .. p.wins
+            .. U.col(GREY, '    Wins with this hero ') .. (p.heroWins[hero.id] or 0))
+        UI.setIcon(C.startIcon, U.spellIcon(start))
+        UI.frameColor(C.startIcon, 255, 214, 120)
+        BlzFrameSetText(C.startName, U.col(GOLD, start.name))
+        BlzFrameSetText(C.startKind, U.col(GREY, (KIND_NAMES[start.kind] or '') .. rankNote(start.maxRank)))
+        Lobby.showTraitInfo()
+
+        local zone = ZONES[S.zone]
+        -- The arena shot ships with the engine build only (Scripts\Survivor).
+        local thumb = Engine.active() and zone.thumb
+        BlzFrameSetTexture(C.zoneArt, thumb or zone.art, 0, true)
+        BlzFrameSetSize(C.zoneArt, thumb and 0.094 or 0.047, 0.047)
+        UI.place(C.zoneArtEdge[1], C.zoneArtX - 0.002, C.zoneArtTop + 0.002, (thumb and 0.094 or 0.047) + 0.004, 0.051)
+        local tierHex = TIER_HEX[zone.tier]
+        BlzFrameSetText(C.zoneName, U.col(GOLD, zone.name))
+        BlzFrameSetText(C.zoneTier, U.col(tierHex, TIER_NAME[zone.tier]:upper()))
+        BlzFrameSetText(C.zoneSub, U.col(tierHex, zone.subtitle))
+        BlzFrameSetText(C.zoneDesc, U.col('d8cfc0', zone.desc))
+        local chips = {}
+        for _, boss in ipairs(zone.bosses) do
+            chips[#chips + 1] = U.col(GOLD, U.time(boss.t)) .. ' ' .. boss.name
+        end
+        chips[#chips + 1] = U.col(RED, U.time(CFG.RUN_LENGTH) .. ' ' .. zone.final.name)
+        BlzFrameSetText(C.zoneBosses, table.concat(chips, U.col(GREY, '  -  ')))
+        local marks = {}
+        local cleared = Profile.zoneDiff(S.zone)
+        for index = 1, 3 do
+            local d = DIFFICULTIES[index]
+            marks[#marks + 1] = cleared >= index and U.col(d.hex, d.name) or U.col('6e665c', d.name)
+        end
+        local keyBest = Profile.keyBest(S.zone)
+        marks[#marks + 1] = keyBest > 0 and U.col('ff8000', 'best +' .. keyBest) or U.col('6e665c', 'no key timed')
+        BlzFrameSetText(C.zoneRecord, table.concat(marks, U.col(GREY, '  -  ')))
+        for i, row in ipairs(C.zoneRows) do
+            local z = ZONES[i]
+            local unlocked = i <= p.unlocked
+            local selected = i == S.zone
+            BlzFrameSetAlpha(row.glow, selected and 150 or 0)
+            if unlocked then
+                BlzFrameSetText(row.name, selected and U.col(GOLD, z.name) or z.name)
+                local zoneCleared = Profile.zoneDiff(i)
+                local zoneKey = Profile.keyBest(i)
+                if zoneKey > 0 then
+                    BlzFrameSetText(row.status, U.col('ff8000', 'Mythic +' .. zoneKey))
+                elseif zoneCleared > 0 then
+                    local d = DIFFICULTIES[math.min(3, zoneCleared)]
+                    BlzFrameSetText(row.status, U.col(d.hex, d.name .. ' cleared'))
+                else
+                    BlzFrameSetText(row.status, U.col(TIER_HEX[z.tier], TIER_NAME[z.tier]))
+                end
+            else
+                BlzFrameSetText(row.name, U.col('6e665c', z.name))
+                BlzFrameSetText(row.status, U.col('6e665c', 'Locked'))
+            end
+            UI.edgeTint(row.edge, selected and 214 or 110, selected and 170 or 84, selected and 90 or 46, 255)
+        end
+
+        Lobby.clampDifficulty()
+        local diff = G.difficulty(S.difficulty, S.keyLevel)
+        UI.setLabel(C.difficulty, U.col(diff.hex, diff.name) .. '\n' .. U.col(GREY, 'rewards x' .. string.format('\037.2f', diff.reward)
+            .. '  ilvl ' .. (100 + 10 * (zone.tier - 1) + diff.ilvl)))
+        local keystone = diff.key == 'mplus'
+        if keystone then
+            BlzFrameSetText(C.keyHint, U.col(GREY, 'Time a key to open the next ones: up to +' .. Profile.keyMax(S.zone)))
+        elseif not Profile.difficultyOpen(S.zone, S.difficulty + 1) and S.difficulty < #DIFFICULTIES then
+            BlzFrameSetText(C.keyHint, U.col(GREY, 'Win on ' .. diff.name .. ' to open ' .. DIFFICULTIES[S.difficulty + 1].name))
+        else
+            BlzFrameSetText(C.keyHint, '')
+        end
+        UI.setLabel(C.enter, U.col(GOLD, 'ENTER ' .. zone.name:upper()))
+        local sub = zone.subtitle .. '  -  ' .. zone.final.name .. ' awaits at ' .. U.time(CFG.RUN_LENGTH)
+        if keystone then
+            sub = 'Keystone +' .. diff.level .. '  -  ' .. zone.final.name .. ' awaits at ' .. U.time(CFG.RUN_LENGTH)
+        end
+        BlzFrameSetText(C.enterSub, U.col(GREY, sub))
+        Lobby.renderDifficulty()
+    end
+
+    -- Details panel shared by the armory and the codex: an icon, a name, a
+    -- subtitle and a body, in the right column.
+    local function detailsPanel(page, D)
+        local x, w, P, T = LAY.right, LAY.side, LAY.pad, LAY.top
+        UI.card(page, x, T, w, LAY.h, 'DETAILS')
+        D.icon = UI.icon(page, TEX.white, x + P + 0.003, T - 0.048, 0.04)
+        D.name = UI.text(page, '', x + P + 0.054, T - 0.047, w - 2 * P - 0.054, 0.016, 0.0105)
+        D.sub = UI.text(page, '', x + P + 0.054, T - 0.065, w - 2 * P - 0.054, 0.024, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        D.body = UI.text(page, '', x + P, T - 0.1, w - 2 * P, 0.078, 0.0082, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        return x + P, w - 2 * P
+    end
+
+    -- Progress line along the bottom of a main panel.
+    local function progressBar(page, x, w)
+        local bar = UI.bar(page, x, LAY.bottom + 0.032, w, 0.008, 214, 170, 90, 0.0068)
+        local text = UI.text(page, '', x, LAY.bottom + 0.05, w, 0.012, 0.0076, TEXT_JUSTIFY_RIGHT)
+        return bar, text
+    end
+
+    ---------------------------------------------------------------------------
+    -- Armory tab: the items bosses drop, the six carried into every run (the
+    -- classic inventory), item levels and the upgrade track
+    ---------------------------------------------------------------------------
+    function Lobby.buildCollection(page)
+        local K = {}
+        Lobby.K = K
+        local P, T = LAY.pad, LAY.top
+        local x, w = LAY.x0, LAY.mainW
+        local ix, iw = x + P, w - 2 * P
+        UI.card(page, x, T, w, LAY.h, 'ARMORY')
+        UI.text(page, U.col(GREY, 'Every boss drops an item. Carry any six into your runs: pick an item, then Equip.'),
+            ix, T - 0.042, iw, 0.013, 0.0072, TEXT_JUSTIFY_CENTER)
+        K.icons = {}
+        local labelW = 0.15
+        local step = (iw - labelW) / 5
+        local size = 0.031
+        for zi, zone in ipairs(ZONES) do
+            local top = T - 0.066 - (zi - 1) * 0.048
+            UI.text(page, U.col(GOLD, zone.name), ix, top, labelW, 0.016, 0.0102)
+            UI.text(page, U.col(GREY, 'Item level ' .. (100 + 10 * (zone.tier - 1)) .. '+'), ix, top - 0.017, labelW, 0.012, 0.0068)
+            local bosses = {zone.bosses[1], zone.bosses[2], zone.bosses[3], zone.bosses[4], zone.final}
+            for bi, boss in ipairs(bosses) do
+                local item = boss.item
+                local bx = ix + labelW + (bi - 1) * step + (step - size) / 2
+                -- Hover previews an item; click selects it for Equip and Upgrade.
+                local o = UI.icon(page, gearIcon(item), bx, top, size, function()
+                    Lobby.selectItem(item)
+                end, function()
+                    Lobby.showItem(item)
+                end, function()
+                    if K.selected then
+                        Lobby.showItem(K.selected)
+                    end
+                end)
+                o.worn = UI.text(page, '', bx + size - 0.012, top - 0.001, 0.011, 0.011, 0.0072, TEXT_JUSTIFY_RIGHT)
+                o.ilvl = UI.text(page, '', bx - 0.012, top - size - 0.003, size + 0.024, 0.01, 0.0064, TEXT_JUSTIFY_CENTER)
+                o.item = item
+                K.icons[#K.icons + 1] = o
+            end
+        end
+        K.progress, K.progressText = progressBar(page, ix, iw)
+
+        local dx, dw = detailsPanel(page, K)
+        K.equip = UI.button(page, dx, T - 0.17, dw, 0.028, '', function()
+            Lobby.toggleEquip()
+        end, 'dark', 0.0092)
+        K.upgrade = UI.button(page, dx, T - 0.203, dw, 0.028, '', function()
+            Lobby.upgradeItem()
+        end, 'green', 0.0088)
+        UI.rule(page, 'INVENTORY', dx, T - 0.238, dw, 0.011)
+        K.average = UI.text(page, '', dx, T - 0.254, dw, 0.012, 0.0074, TEXT_JUSTIFY_CENTER)
+        -- Two columns of three, like the hero inventory of the game.
+        K.slots = {}
+        local slotSize, slotGap = 0.036, 0.008
+        for slot = 1, INVENTORY_SIZE do
+            local column = math.fmod(slot - 1, 2)
+            local row = (slot - 1) // 2
+            local sx = dx + 0.008 + column * (slotSize + slotGap)
+            local stop = T - 0.274 - row * (slotSize + slotGap)
+            local o = UI.icon(page, TEX.white, sx, stop, slotSize, function()
+                local item = gearEquipped(Profile.data)[slot]
+                if item then
+                    Lobby.selectItem(item)
+                end
+            end)
+            K.slots[slot] = o
+        end
+        local listX = dx + 0.008 + 2 * slotSize + slotGap + 0.012
+        K.worn = UI.text(page, '', listX, T - 0.272, dx + dw - listX, 3 * slotSize + 2 * slotGap + 0.004, 0.0068,
+            TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+    end
+
+    function Lobby.selectItem(item)
+        Lobby.K.selected = item
+        Lobby.refreshCollection()
+    end
+
+    function Lobby.showItem(item)
+        local K = Lobby.K
+        local p = Profile.data
+        local ilvl = Profile.itemLevel(item)
+        local steps = p.upg[item.id] or 0
+        UI.setIcon(K.icon, gearIcon(item), ilvl == nil)
+        BlzFrameSetText(K.name, ilvl and U.col(gearHex(ilvl), item.name) or U.col('6e665c', item.name))
+        BlzFrameSetText(K.sub, U.col(GREY, 'Dropped by ') .. item.boss.name
+            .. U.col(GREY, '\nin ' .. ZONES[item.zone].name .. ' at ' .. U.time(item.boss.t)))
+        local lines = {}
+        if ilvl then
+            lines[#lines + 1] = U.col(GOLD, 'Item level ' .. ilvl) .. U.col(GREY, '   upgrade ' .. steps .. '/' .. GEAR_UPGRADES)
+            lines[#lines + 1] = G.describeBlessing(item.stat, Profile.itemValue(item, ilvl))
+            if steps < GEAR_UPGRADES then
+                lines[#lines + 1] = U.col(GREY, 'Next: ') .. G.describeBlessing(item.stat,
+                    Profile.itemValue(item, ilvl + GEAR_STEP_ILVL))
+            end
+            lines[#lines + 1] = gearSlotOf(p, item) and U.col(GREEN, 'Carried') or U.col(GREY, 'In the armory')
+        else
+            lines[#lines + 1] = U.col(GREY, 'Not looted yet. ') .. G.describeBlessing(item.stat, item.stat.per)
+                .. U.col(GREY, ' at item level 100.')
+            lines[#lines + 1] = U.col(GREY, 'Drops at item level ') .. item.baseIlvl .. U.col(GREY, ' on Normal, ')
+                .. (item.baseIlvl + 10) .. U.col(GREY, ' Heroic, ') .. (item.baseIlvl + 20) .. U.col(GREY, ' Mythic, up to ')
+                .. (item.baseIlvl + 40) .. U.col(GREY, ' from a +10 keystone.')
+        end
+        BlzFrameSetText(K.body, table.concat(lines, '\n'))
+        -- The buttons act on the selected item, not the hovered one.
+        local selected = K.selected
+        local owned = selected and Profile.itemLevel(selected) ~= nil
+        if not owned then
+            UI.setLabel(K.equip, 'Loot it first')
+            UI.setEnabled(K.equip, false)
+            UI.setLabel(K.upgrade, 'Upgrade')
+            UI.setEnabled(K.upgrade, false)
+            return
+        end
+        if gearSlotOf(p, selected) then
+            UI.setLabel(K.equip, 'Unequip')
+            UI.setEnabled(K.equip, true)
+        elseif Lobby.freeSlot() then
+            UI.setLabel(K.equip, 'Equip')
+            UI.setEnabled(K.equip, true)
+        else
+            UI.setLabel(K.equip, 'Inventory full  -  unequip an item')
+            UI.setEnabled(K.equip, false)
+        end
+        if (p.upg[selected.id] or 0) >= GEAR_UPGRADES then
+            UI.setLabel(K.upgrade, 'Fully upgraded')
+            UI.setEnabled(K.upgrade, false)
+        else
+            local cost = gearUpgradeCost(p, selected)
+            UI.setLabel(K.upgrade, 'Upgrade  +' .. GEAR_STEP_ILVL .. ' item level  -  ' .. U.col(GOLD, cost .. ' gold'))
+            UI.setEnabled(K.upgrade, p.gold >= cost)
+        end
+    end
+
+    function Lobby.freeSlot()
+        local worn = gearEquipped(Profile.data)
+        for slot = 1, INVENTORY_SIZE do
+            if worn[slot] == nil then
+                return slot
+            end
+        end
+        return nil
+    end
+
+    function Lobby.toggleEquip()
+        local item = Lobby.K.selected
+        local p = Profile.data
+        if item == nil or p.gear[item.id] == nil then
+            return
+        end
+        local slot = gearSlotOf(p, item)
+        if slot then
+            p.inv[tostring(slot)] = nil
+        else
+            slot = Lobby.freeSlot()
+            if slot == nil then
+                return
+            end
+            p.inv[tostring(slot)] = item.index
+        end
+        Profile.checkAchievements()
+        Profile.save()
+        Lobby.refresh()
+    end
+
+    function Lobby.upgradeItem()
+        local item = Lobby.K.selected
+        local p = Profile.data
+        if item == nil or p.gear[item.id] == nil or (p.upg[item.id] or 0) >= GEAR_UPGRADES then
+            return
+        end
+        local cost = gearUpgradeCost(p, item)
+        if p.gold < cost then
+            return
+        end
+        p.gold = p.gold - cost
+        p.upg[item.id] = (p.upg[item.id] or 0) + 1
+        Profile.checkAchievements()
+        Profile.save()
+        Lobby.refresh()
+    end
+
+    function Lobby.refreshCollection()
+        local K = Lobby.K
+        local p = Profile.data
+        local owned = 0
+        for _, o in ipairs(K.icons) do
+            local ilvl = Profile.itemLevel(o.item)
+            UI.setIcon(o, gearIcon(o.item), ilvl == nil)
+            if ilvl then
+                owned = owned + 1
+                local hex = gearHex(ilvl)
+                UI.frameColor(o, tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16))
+                BlzFrameSetText(o.ilvl, U.col(hex, tostring(ilvl)))
+                BlzFrameSetText(o.worn, gearSlotOf(p, o.item) and U.col(GOLD, 'E') or '')
+            else
+                UI.frameColor(o, 70, 60, 50)
+                BlzFrameSetText(o.ilvl, U.col('6e665c', U.time(o.item.boss.t)))
+                BlzFrameSetText(o.worn, '')
+            end
+            if o.item == K.selected then
+                UI.frameColor(o, 255, 255, 255)
+            end
+        end
+        UI.setBar(K.progress, owned / #GEAR)
+        BlzFrameSetText(K.progressText, U.col(GREY, 'Looted ') .. owned .. ' / ' .. #GEAR)
+        BlzFrameSetText(K.average, U.col(GREY, 'Average item level ') .. U.col(GOLD, tostring(gearAverage(p))))
+        local worn = gearEquipped(p)
+        local lines = {}
+        for slot = 1, INVENTORY_SIZE do
+            local item = worn[slot]
+            local o = K.slots[slot]
+            if item then
+                local ilvl = Profile.itemLevel(item)
+                UI.setIcon(o, gearIcon(item))
+                UI.frameColor(o, item == K.selected and 255 or 214, item == K.selected and 255 or 170, item == K.selected and 255 or 90)
+                lines[#lines + 1] = U.col(gearHex(ilvl), ilvl .. '  ') .. G.describeBlessing(item.stat, Profile.itemValue(item, ilvl))
+            else
+                BlzFrameSetTexture(o.img, TEX.white, 0, true)
+                UI.tint(o.img, 18, 14, 10, 230)
+                UI.frameColor(o, 90, 70, 44)
+                lines[#lines + 1] = U.col('6e665c', 'empty')
+            end
+        end
+        BlzFrameSetText(K.worn, table.concat(lines, '\n'))
+        local selected = K.selected
+        if selected == nil then
+            -- Open on the first item owned, so Equip and Upgrade are in reach.
+            for _, item in ipairs(GEAR) do
+                if p.gear[item.id] then
+                    selected = item
+                    break
+                end
+            end
+        end
+        K.selected = selected or GEAR[1]
+        Lobby.showItem(K.selected)
+    end
+
+    ---------------------------------------------------------------------------
+    -- Codex tab: every card a run has ever offered
+    ---------------------------------------------------------------------------
+    function Lobby.buildCodex(page)
+        local X = {}
+        Lobby.X = X
+        local P, T = LAY.pad, LAY.top
+        local x, w = LAY.x0, LAY.mainW
+        local ix, iw = x + P, w - 2 * P
+        UI.card(page, x, T, w, LAY.h, 'CODEX')
+        UI.text(page, U.col(GREY, 'SPELLS'), ix, T - 0.042, 0.2, 0.012, 0.0072)
+        X.icons = {}
+        local size, step = 0.025, 0.0302
+        local perRow = math.floor((iw + step - size) / step)
+        local gridX = ix + (iw - (perRow - 1) * step - size) / 2
+        for i, key in ipairs(SPELL_ORDER) do
+            local column = math.fmod(i - 1, perRow)
+            local row = (i - 1) // perRow
+            local o = UI.icon(page, U.spellIcon(SPELLS[key]), gridX + column * step, T - 0.058 - row * step, size, nil, function()
+                Lobby.showCodexEntry(key)
+            end)
+            o.key = key
+            X.icons[#X.icons + 1] = o
+        end
+        local rows = (#SPELL_ORDER + perRow - 1) // perRow
+        local blessTop = T - 0.058 - rows * step - 0.02
+        UI.text(page, U.col(GREY, 'BLESSINGS'), ix, blessTop + 0.016, 0.2, 0.012, 0.0072)
+        for i, b in ipairs(BLESSINGS) do
+            local column = math.fmod(i - 1, perRow)
+            local row = (i - 1) // perRow
+            local key = b.key
+            local o = UI.icon(page, U.icon(b.code, b.icon), gridX + column * step, blessTop - row * step, size, nil, function()
+                Lobby.showCodexEntry(key)
+            end)
+            o.key = key
+            o.blessing = b
+            X.icons[#X.icons + 1] = o
+        end
+        X.progress, X.progressText = progressBar(page, ix, iw)
+
+        local dx, dw = detailsPanel(page, X)
+        X.heroes = UI.text(page, '', dx, T - 0.19, dw, LAY.h - 0.19 - P, 0.0076, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+    end
+
+    function Lobby.showCodexEntry(key)
+        local X = Lobby.X
+        local seen = Profile.data.codex[key] ~= nil
+        local def = SPELLS[key]
+        if def then
+            UI.setIcon(X.icon, U.spellIcon(def), not seen)
+            BlzFrameSetText(X.name, seen and U.col(GOLD, def.name) or U.col('6e665c', def.name))
+            BlzFrameSetText(X.sub, U.col(GREY, (KIND_NAMES[def.kind] or def.kind) .. rankNote(def.maxRank)))
+            BlzFrameSetText(X.body, U.col('d8cfc0', G.describe(def, G.spellValues(def, 1, 1, G.baseStats()))))
+            local names = {}
+            for _, hero in ipairs(HEROES) do
+                for _, poolKey in ipairs(hero.pool) do
+                    if poolKey == key then
+                        names[#names + 1] = hero.name
+                    end
+                end
+            end
+            BlzFrameSetText(X.heroes, U.col(GREY, 'Offered to: ') .. table.concat(names, ', ')
+                .. (seen and '' or ('\n\n' .. U.col('6e665c', 'Not offered yet.'))))
+        else
+            local b = BLESSING_BY_KEY[key]
+            UI.setIcon(X.icon, U.icon(b.code, b.icon), not seen)
+            BlzFrameSetText(X.name, seen and U.col(GOLD, b.name) or U.col('6e665c', b.name))
+            BlzFrameSetText(X.sub, U.col(GREY, 'Blessing' .. rankNote(nil)))
+            BlzFrameSetText(X.body, U.col('d8cfc0', G.describeBlessing(b, b.per) .. ' per rank.'))
+            BlzFrameSetText(X.heroes, U.col(GREY, 'Offered to every hero. Takes no spell slot.'))
+        end
+    end
+
+    function Lobby.refreshCodex()
+        local X = Lobby.X
+        local seen = 0
+        for _, o in ipairs(X.icons) do
+            local has = Profile.data.codex[o.key] ~= nil
+            if has then
+                seen = seen + 1
+            end
+            local texture = o.blessing and U.icon(o.blessing.code, o.blessing.icon) or U.spellIcon(SPELLS[o.key])
+            UI.setIcon(o, texture, not has)
+            UI.frameColor(o, has and 150 or 60, has and 112 or 50, has and 58 or 40)
+        end
+        UI.setBar(X.progress, seen / #X.icons)
+        BlzFrameSetText(X.progressText, U.col(GREY, 'Discovered ') .. seen .. ' / ' .. #X.icons)
+        Lobby.showCodexEntry(SPELL_ORDER[1])
+    end
+
+    ---------------------------------------------------------------------------
+    -- Talents tab: permanent upgrades bought with gold
+    ---------------------------------------------------------------------------
+    function Lobby.buildTalents(page)
+        local T = {rows = {}}
+        Lobby.T = T
+        local P, top0 = LAY.pad, LAY.top
+        local x, w = LAY.x0, LAY.w
+        local ix, iw = x + P, w - 2 * P
+        UI.card(page, x, top0, w, LAY.h, 'TALENTS')
+        T.info = UI.text(page, '', ix, top0 - 0.042, iw, 0.013, 0.0078, TEXT_JUSTIFY_CENTER)
+        local rowW = (iw - LAY.gap) / 2
+        for i, talent in ipairs(TALENTS) do
+            local column = math.fmod(i - 1, 2)
+            local row = (i - 1) // 2
+            local rx = ix + column * (rowW + LAY.gap)
+            local top = top0 - 0.064 - row * 0.062
+            local o = {}
+            well(page, rx, top, rowW, 0.054)
+            o.icon = UI.icon(page, U.icon(talent.code, talent.icon), rx + 0.01, top - 0.009, 0.036)
+            local textW = rowW - 0.056 - 0.1
+            o.name = UI.text(page, '', rx + 0.056, top - 0.005, textW, 0.016, 0.0102)
+            o.rank = UI.text(page, '', rx + 0.056, top - 0.021, textW, 0.012, 0.0072)
+            o.desc = UI.text(page, '', rx + 0.056, top - 0.034, textW, 0.014, 0.0074)
+            local key = talent.key
+            o.buy = UI.button(page, rx + rowW - 0.092, top - 0.012, 0.082, 0.03, '', function()
+                Lobby.buyTalent(key)
+            end, 'green', 0.0092)
+            T.rows[i] = o
+        end
+        T.refund = UI.button(page, 0.4 - 0.08, LAY.bottom + 0.054, 0.16, 0.028, 'Refund all talents', function()
+            local p = Profile.data
+            for _, talent in ipairs(TALENTS) do
+                for rank = 1, Profile.talent(talent.key) do
+                    p.gold = p.gold + talentCost(rank)
+                end
+                p.talents[talent.key] = nil
+            end
+            Profile.save()
+            Lobby.refresh()
+        end, 'dark', 0.0088)
+    end
+
+    function Lobby.buyTalent(key)
+        for _, talent in ipairs(TALENTS) do
+            if talent.key == key then
+                local rank = Profile.talent(key)
+                local cost = talentCost(rank + 1)
+                if rank < talent.max and Profile.data.gold >= cost then
+                    Profile.data.gold = Profile.data.gold - cost
+                    Profile.data.talents[key] = rank + 1
+                    Profile.save()
+                    Lobby.refresh()
+                end
+                return
+            end
+        end
+    end
+
+    function Lobby.refreshTalents()
+        local T = Lobby.T
+        BlzFrameSetText(T.info, U.col(GREY, 'Gold from every run buys permanent talents for all heroes.   You have ')
+            .. U.col(GOLD, U.big(Profile.data.gold) .. ' gold'))
+        for i, talent in ipairs(TALENTS) do
+            local o = T.rows[i]
+            local rank = Profile.talent(talent.key)
+            BlzFrameSetText(o.name, U.col(GOLD, talent.name))
+            BlzFrameSetText(o.rank, U.col(GREY, 'Rank ') .. rank .. ' / ' .. talent.max)
+            local current = rank > 0 and G.describeBlessing(talent, talent.per * rank) or U.col(GREY, 'Not learned')
+            BlzFrameSetText(o.desc, current)
+            if rank >= talent.max then
+                UI.setLabel(o.buy, 'Max')
+                UI.setEnabled(o.buy, false)
+            else
+                local cost = talentCost(rank + 1)
+                UI.setLabel(o.buy, U.col(GOLD, U.big(cost)) .. ' gold')
+                UI.setEnabled(o.buy, Profile.data.gold >= cost)
+            end
+        end
+    end
+
+    -- Summary column of the achievements and rewards pages: a big number,
+    -- a line under it, and a note.
+    local function summaryPanel(page, title, note)
+        local x, w, P, T = LAY.x0, LAY.summary, LAY.pad, LAY.top
+        UI.card(page, x, T, w, LAY.h, title)
+        local big = UI.text(page, '', x, T - 0.044, w, 0.05, 0.04, TEXT_JUSTIFY_CENTER)
+        UI.text(page, U.col(GREY, note), x + P, LAY.bottom + 0.11, w - 2 * P, 0.085, 0.0074, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        return big, x + P, w - 2 * P
+    end
+
+    -- Two columns of cells in the list panel right of the summary.
+    local function listPanel(page, title)
+        local x = LAY.x0 + LAY.summary + LAY.gap
+        local w = LAY.x1 - x
+        UI.card(page, x, LAY.top, w, LAY.h, title)
+        local ix, iw = x + LAY.pad, w - 2 * LAY.pad
+        return ix, (iw - LAY.gap) / 2
+    end
+
+    ---------------------------------------------------------------------------
+    -- Achievements tab
+    ---------------------------------------------------------------------------
+    local ACH_PER_PAGE = 12
+
+    function Lobby.buildAchievements(page)
+        local A = {cells = {}, page = 1}
+        Lobby.A = A
+        local sx, sw
+        A.points, sx, sw = summaryPanel(page, 'ACHIEVEMENTS', 'Every hero earns them for the whole account. Spend the points on the Rewards tab.')
+        A.pointsSub = UI.text(page, '', sx, LAY.top - 0.098, sw, 0.013, 0.008, TEXT_JUSTIFY_CENTER)
+        A.progress = UI.bar(page, sx + 0.006, LAY.top - 0.124, sw - 0.012, 0.008, 214, 170, 90, 0.0068)
+        A.count = UI.text(page, '', sx, LAY.top - 0.14, sw, 0.013, 0.008, TEXT_JUSTIFY_CENTER)
+
+        local lx, cw = listPanel(page, 'ALL ACHIEVEMENTS')
+        for i = 1, ACH_PER_PAGE do
+            local column = math.fmod(i - 1, 2)
+            local row = (i - 1) // 2
+            local x = lx + column * (cw + LAY.gap)
+            local top = LAY.top - 0.046 - row * 0.054
+            local o = {}
+            o.edge = well(page, x, top, cw, 0.048)
+            o.icon = UI.icon(page, TEX.white, x + 0.008, top - 0.008, 0.032)
+            local textW = cw - 0.05 - 0.05
+            o.name = UI.text(page, '', x + 0.05, top - 0.004, textW, 0.015, 0.0094)
+            o.desc = UI.text(page, '', x + 0.05, top - 0.018, textW, 0.012, 0.007)
+            o.bar = UI.bar(page, x + 0.052, top - 0.035, textW - 0.066, 0.006, 214, 170, 90, 0.006)
+            o.barText = UI.text(page, '', x + 0.052 + textW - 0.058, top - 0.031, 0.058, 0.012, 0.0064)
+            o.points = UI.text(page, '', x + cw - 0.048, top - 0.004, 0.04, 0.02, 0.0115, TEXT_JUSTIFY_RIGHT)
+            A.cells[i] = o
+        end
+        local mid = lx + cw + LAY.gap / 2
+        A.prev = UI.button(page, mid - 0.115, LAY.bottom + 0.05, 0.075, 0.026, '< Prev', function()
+            A.page = math.max(1, A.page - 1)
+            Lobby.refresh()
+        end, 'dark', 0.0088)
+        A.pageText = UI.text(page, '', mid - 0.035, LAY.bottom + 0.05, 0.07, 0.026, 0.0088, TEXT_JUSTIFY_CENTER)
+        A.next = UI.button(page, mid + 0.04, LAY.bottom + 0.05, 0.075, 0.026, 'Next >', function()
+            A.page = math.min(math.ceil(#ACHIEVEMENTS / ACH_PER_PAGE), A.page + 1)
+            Lobby.refresh()
+        end, 'dark', 0.0088)
+    end
+
+    function Lobby.refreshAchievements()
+        local A = Lobby.A
+        local p = Profile.data
+        local _, earnedPoints = Profile.points()
+        local totalPoints, earnedCount = 0, 0
+        for _, a in ipairs(ACHIEVEMENTS) do
+            totalPoints = totalPoints + a.points
+            if p.ach[a.key] then
+                earnedCount = earnedCount + 1
+            end
+        end
+        BlzFrameSetText(A.points, U.col(GOLD, tostring(earnedPoints)))
+        BlzFrameSetText(A.pointsSub, U.col(GREY, 'of ' .. totalPoints .. ' points'))
+        UI.setBar(A.progress, earnedPoints / math.max(1, totalPoints))
+        BlzFrameSetText(A.count, earnedCount .. U.col(GREY, ' of ' .. #ACHIEVEMENTS .. ' earned'))
+        local pages = math.ceil(#ACHIEVEMENTS / ACH_PER_PAGE)
+        BlzFrameSetText(A.pageText, A.page .. ' / ' .. pages)
+        UI.setEnabled(A.prev, A.page > 1)
+        UI.setEnabled(A.next, A.page < pages)
+        for i, o in ipairs(A.cells) do
+            local a = ACHIEVEMENTS[(A.page - 1) * ACH_PER_PAGE + i]
+            local visible = a ~= nil
+            for _, f in ipairs({o.name, o.desc, o.barText, o.points, o.bar.back, o.bar.fill, o.bar.edge, o.bar.text}) do
+                BlzFrameSetVisible(f, visible)
+            end
+            for _, f in ipairs(o.edge) do
+                BlzFrameSetVisible(f, visible)
+            end
+            UI.showIcon(o.icon, visible)
+            if a then
+                local earned = p.ach[a.key] ~= nil
+                local current, goal = a.progress(p)
+                current = math.min(current, goal)
+                UI.setIcon(o.icon, U.icon(a.code, a.icon), not earned)
+                UI.frameColor(o.icon, earned and 214 or 70, earned and 170 or 60, earned and 90 or 50)
+                BlzFrameSetText(o.name, earned and U.col(GOLD, a.name) or a.name)
+                BlzFrameSetText(o.desc, U.col(GREY, a.desc))
+                UI.setBar(o.bar, current / goal)
+                BlzFrameSetText(o.barText, U.col(GREY, U.big(current) .. '/' .. U.big(goal)))
+                BlzFrameSetText(o.points, earned and U.col(GOLD, tostring(a.points)) or U.col('6e665c', tostring(a.points)))
+                UI.edgeTint(o.edge, earned and 214 or 110, earned and 170 or 84, earned and 90 or 46, 255)
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Rewards tab: perks bought with achievement points
+    ---------------------------------------------------------------------------
+    function Lobby.buildRewards(page)
+        local W = {rows = {}}
+        Lobby.W = W
+        local sx, sw
+        W.points, sx, sw = summaryPanel(page, 'REWARDS', 'Perks belong to the account: every hero of every faction has them. Earn achievements for more points.')
+        W.sub = UI.text(page, '', sx, LAY.top - 0.098, sw, 0.03, 0.008, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP)
+        W.reset = UI.button(page, sx + 0.01, LAY.top - 0.142, sw - 0.02, 0.028, 'Reset perks', function()
+            Profile.data.perks = {}
+            Profile.save()
+            Lobby.refresh()
+        end, 'dark', 0.0088)
+
+        local lx, cw = listPanel(page, 'PERKS')
+        for i, perk in ipairs(PERKS) do
+            local column = math.fmod(i - 1, 2)
+            local row = (i - 1) // 2
+            local x = lx + column * (cw + LAY.gap)
+            local top = LAY.top - 0.046 - row * 0.082
+            local o = {}
+            well(page, x, top, cw, 0.074)
+            o.icon = UI.icon(page, U.icon(perk.code, perk.icon), x + 0.01, top - 0.01, 0.034)
+            local textW = cw - 0.054 - 0.01
+            o.name = UI.text(page, '', x + 0.054, top - 0.006, textW - 0.08, 0.015, 0.0096)
+            o.rank = UI.text(page, '', x + cw - 0.09, top - 0.006, 0.08, 0.015, 0.0072, TEXT_JUSTIFY_RIGHT)
+            o.desc = UI.text(page, U.col('d8cfc0', perk.desc), x + 0.054, top - 0.024, textW, 0.024, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+            local key = perk.key
+            o.buy = UI.button(page, x + cw - 0.1, top - 0.048, 0.09, 0.022, '', function()
+                Lobby.buyPerk(key)
+            end, 'green', 0.0082)
+            W.rows[i] = o
+        end
+    end
+
+    function Lobby.buyPerk(key)
+        local perk = PERK_BY_KEY[key]
+        local rank = Profile.perk(key)
+        local cost = perk.costs[rank + 1]
+        if cost and Profile.points() >= cost then
+            Profile.data.perks[key] = rank + 1
+            Profile.save()
+            Lobby.refresh()
+        end
+    end
+
+    function Lobby.refreshRewards()
+        local W = Lobby.W
+        local free, earned, spent = Profile.points()
+        BlzFrameSetText(W.points, U.col(GOLD, tostring(free)))
+        BlzFrameSetText(W.sub, U.col(GREY, 'points to spend\n' .. earned .. ' earned  -  ' .. spent .. ' spent'))
+        for i, perk in ipairs(PERKS) do
+            local o = W.rows[i]
+            local rank = Profile.perk(perk.key)
+            BlzFrameSetText(o.name, rank > 0 and U.col(GOLD, perk.name) or perk.name)
+            BlzFrameSetText(o.rank, U.col(GREY, 'Rank ' .. rank .. ' / ' .. #perk.costs))
+            local cost = perk.costs[rank + 1]
+            if cost then
+                UI.setLabel(o.buy, 'Buy  ' .. U.col(GOLD, cost .. ' pts'))
+                UI.setEnabled(o.buy, free >= cost)
+            else
+                UI.setLabel(o.buy, 'Max rank')
+                UI.setEnabled(o.buy, false)
+            end
+            UI.setIcon(o.icon, U.icon(perk.code, perk.icon), rank == 0)
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Keyboard shortcuts (cards, reroll, play, menu). The hero moves with the
+    -- mouse only: it walks to the last right-click.
+    ---------------------------------------------------------------------------
+    local KEY_HANDLES = {}
+
+    -- Keys go through the bindings (Keys.actionOf); Escape always opens the
+    -- menu. While a binding waits (Options > Keybinds), the next key pressed
+    -- becomes its key.
+    function G.onKey()
+        local key = BlzGetTriggerPlayerKey()
+        local down = BlzGetTriggerPlayerIsKeyDown()
+        local code = nil
+        for _, entry in ipairs(KEY_HANDLES) do
+            if key == entry[1] then
+                code = entry[2]
+                break
+            end
+        end
+        if code == nil then
+            return
+        end
+        -- Holding a key repeats key-down events; act only on the press.
+        local pressed = down and not S.down[code]
+        S.down[code] = down
+        if Options.waiting then
+            if pressed then
+                Options.capture(code)
+            end
+            return
+        end
+        if code == KEY_ESCAPE then
+            if pressed then
+                G.onAction('menu')
+            end
+            return
+        end
+        local name = Keys.actionOf and Keys.actionOf[code]
+        if name then
+            S.keys[name] = down
+            if pressed then
+                G.onAction(name)
+            end
+        end
+    end
+
+    -- A right-click order on the hero: its native move is cancelled (the
+    -- script moves the hero) and the clicked point becomes the walk target.
+    function G.onOrder(onTarget)
+        if R == nil or R.ended or GetTriggerUnit() ~= R.hero then
+            return
+        end
+        R.cancelOrder = true
+        if Keys.wasd() then
+            -- Keyboard movement: right-clicks do not walk.
+            return
+        end
+        local x, y
+        -- A click on a unit, a tree, a doodad or an item walks to it. A target
+        -- order has no point: reading one gave (0, 0), the middle of the map,
+        -- and pulled the hero back toward the spawn.
+        if onTarget then
+            local target = GetOrderTarget()
+            if target then
+                x, y = GetWidgetX(target), GetWidgetY(target)
+            end
+        else
+            x, y = GetOrderPointX(), GetOrderPointY()
+        end
+        if type(x) == 'number' and type(y) == 'number' then
+            R.clickX = U.clamp(x, G.minX, G.maxX)
+            R.clickY = U.clamp(y, G.minY, G.maxY)
+        end
+    end
+
+    function G.onAction(name)
+        -- The difficulty window takes Escape and keeps Space from starting a run behind it.
+        local difficultyOpen = Lobby.D and Lobby.D.open and not Options.open
+        if name == 'menu' then
+            if difficultyOpen then
+                Lobby.closeDifficulty()
+            else
+                Options.toggle()
+            end
+            return
+        end
+        if Options.open or difficultyOpen then
+            return
+        end
+        if R and R.hand then
+            if name == 'reroll' then
+                Cards.rerollHand()
+            elseif name:sub(1, 4) == 'card' then
+                Cards.pick(tonumber(name:sub(5)))
+            end
+        elseif R == nil and S.screen == 'lobby' and S.tab == 'character' and name == 'play' then
+            G.startRun()
+        end
+    end
+
+    function G.registerKeys()
+        local trigger = CreateTrigger()
+        KEY_HANDLES = {}
+        for _, entry in ipairs(KEY_LIST) do
+            local handle = _G['OSKEY_' .. entry[1]]
+            if handle then
+                KEY_HANDLES[#KEY_HANDLES + 1] = {handle, entry[2]}
+                BlzTriggerRegisterPlayerKeyEvent(trigger, G.PLAYER, handle, 0, true)
+                BlzTriggerRegisterPlayerKeyEvent(trigger, G.PLAYER, handle, 0, false)
+            end
+        end
+        TriggerAddAction(trigger, function()
+            UI.safe(G.onKey)
+        end)
+
+        local pointOrders = CreateTrigger()
+        TriggerRegisterPlayerUnitEvent(pointOrders, G.PLAYER, EVENT_PLAYER_UNIT_ISSUED_POINT_ORDER, nil)
+        TriggerAddAction(pointOrders, function()
+            UI.safe(G.onOrder, false)
+        end)
+        local targetOrders = CreateTrigger()
+        TriggerRegisterPlayerUnitEvent(targetOrders, G.PLAYER, EVENT_PLAYER_UNIT_ISSUED_TARGET_ORDER, nil)
+        TriggerAddAction(targetOrders, function()
+            UI.safe(G.onOrder, true)
+        end)
+    end
+
+    ---------------------------------------------------------------------------
+    -- Boot
+    ---------------------------------------------------------------------------
+    function G.boot()
+        G.initWorld()
+        UI.init()
+        Profile.load()
+        if #Profile.checkAchievements() > 0 then
+            Profile.save()
+        end
+        Keys.rebuild()
+        Options.apply()
+        S.zone = math.min(S.zone, Profile.data.unlocked)
+
+        -- Hide the default console and let the world fill the whole screen.
+        BlzHideOriginFrames(true)
+        BlzFrameSetAllPoints(BlzGetOriginFrame(ORIGIN_FRAME_WORLD_FRAME, 0), BlzGetOriginFrame(ORIGIN_FRAME_GAME_UI, 0))
+        local consoleBackdrop = BlzGetFrameByName('ConsoleUIBackdrop', 0)
+        if consoleBackdrop then
+            BlzFrameSetVisible(consoleBackdrop, false)
+        end
+        local resourceBar = BlzGetFrameByName('ResourceBarFrame', 0)
+        if resourceBar then
+            BlzFrameSetVisible(resourceBar, false)
+        end
+        EnableSelect(false, false)
+        ClearTextMessages()
+
+        Hud.build()
+        Cards.build()
+        Finale.build()
+        Lobby.build()
+        Options.build()
+
+        local damage = CreateTrigger()
+        TriggerRegisterAnyUnitEventBJ(damage, EVENT_PLAYER_UNIT_DAMAGED)
+        TriggerAddAction(damage, function()
+            UI.safe(G.onDamage)
+        end)
+        local death = CreateTrigger()
+        TriggerRegisterPlayerUnitEvent(death, G.ENEMY, EVENT_PLAYER_UNIT_DEATH, nil)
+        TriggerRegisterPlayerUnitEvent(death, G.PLAYER, EVENT_PLAYER_UNIT_DEATH, nil)
+        TriggerAddAction(death, function()
+            UI.safe(G.onDeath)
+        end)
+        G.registerKeys()
+
+        TimerStart(CreateTimer(), CFG.TICK, true, function()
+            UI.safe(G.tick)
+        end)
+        if Engine.active() then
+            -- Camera input stays with the script: the lobby holds the showcase
+            -- and the run follows the hero. Clicks and keys still arrive.
+            EnableUserControl(false)
+            -- Test runs can open a lobby tab directly: +set survivor_tab codex
+            local tab = EngineCvar('survivor_tab')
+            if Lobby.pages[tab] then
+                S.tab = tab
+            end
+        end
+        if Engine.takeRun() then
+            G.inArena = true
+            G.startRun()
+        else
+            Lobby.show()
+        end
+        if Engine.active() then
+            -- Test runs can open an options page directly: +set survivor_menu keys
+            local page = EngineCvar('survivor_menu')
+            if Options.pages[page] then
+                Options.show()
+                Options.setPage(page)
+            elseif page == 'difficulty' and S.screen == 'lobby' then
+                -- +set survivor_menu difficulty opens the difficulty window.
+                Lobby.openDifficulty()
+            end
+        end
+    end
+
+    ---------------------------------------------------------------------------
+    -- Standalone engine (engine/, see CLAUDE.md). engine_boot.lua sets
+    -- SURVIVOR_ENGINE; the engine adds EngineCvar. The menu runs on a quiet
+    -- map load, and entering a zone loads that zone's own map behind a
+    -- loading screen. Console variables outlive the map change, so they carry
+    -- the chosen run; the profile is saved to disk in between.
+    ---------------------------------------------------------------------------
+    -- rawget: unknown globals fall back to natives in the engine (and to stubs in the smoke test).
+    function Engine.active()
+        local config = rawget(_G, 'SURVIVOR_ENGINE')
+        return type(config) == 'table' and config.menu ~= nil and type(rawget(_G, 'EngineCvar')) == 'function'
+    end
+
+    function Engine.loadingScreen(zone, background)
+        EngineCvar('wc3_loading_quiet', zone and '0' or '1')
+        EngineCvar('wc3_loading_title', zone and zone.name or '')
+        EngineCvar('wc3_loading_subtitle', zone and zone.subtitle or '')
+        EngineCvar('wc3_loading_text', zone and zone.desc or '')
+        EngineCvar('wc3_loading_background', zone and tostring(background) or '')
+    end
+
+    function Engine.enterZone()
+        local arenas = SURVIVOR_ENGINE.arenas
+        local arena = arenas[S.zone] or arenas[1]
+        EngineCvar('survivor_run', S.heroIndex .. ' ' .. S.zone .. ' ' .. S.difficulty .. ' ' .. S.keyLevel)
+        Engine.loadingScreen(ZONES[S.zone], arena.loading)
+        Profile.save()
+        ChangeLevel(arena.map, false)
+    end
+
+    function Engine.returnToMenu()
+        EngineCvar('survivor_run', '')
+        Engine.loadingScreen(nil)
+        Profile.save()
+        ChangeLevel(SURVIVOR_ENGINE.menu, false)
+    end
+
+    -- On a zone map: take the run chosen in the menu (once), or nil.
+    function Engine.takeRun()
+        if not Engine.active() then
+            return nil
+        end
+        local text = EngineCvar('survivor_run')
+        EngineCvar('survivor_run', '')
+        local hero, zone, difficulty, key = text:match('^(\037d+) (\037d+) (\037d+) (\037d+)$')
+        if hero == nil or HEROES[tonumber(hero)] == nil or ZONES[tonumber(zone)] == nil then
+            return nil
+        end
+        S.heroIndex, S.zone = tonumber(hero), tonumber(zone)
+        S.difficulty, S.keyLevel = tonumber(difficulty), tonumber(key)
+        S.faction = HEROES[S.heroIndex].faction
+        return true
+    end
+
+    -- Entry point: call Survivor_Start() from a Map Initialization trigger.
+    function Survivor_Start()
+        TimerStart(CreateTimer(), 0.0, false, function()
+            DestroyTimer(GetExpiredTimer())
+            UI.safe(G.boot)
+        end)
+    end
+end

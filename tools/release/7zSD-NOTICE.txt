@@ -1,0 +1,3 @@
+7zSD.sfx was taken from the official 7-Zip LZMA SDK 26.05 package.
+The SDK's DOC\installer.txt says the LZMA SDK is in the public domain and
+permits joining the SFX module with other software.

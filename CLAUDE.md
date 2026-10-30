@@ -1,0 +1,365 @@
+# Warcraft Survivors
+
+Survivors-style Warcraft III Reforged map. The whole game is one Lua file,
+`src/ashenvale_survivor.lua`, pasted into the map's Custom Script Code
+(Trigger Editor > map name at the top of the tree). The map is `map/WarcraftSurvivor.w3m`.
+
+## Rules for the Lua source
+
+- **No `%` character anywhere in `src/ashenvale_survivor.lua`**, not even in comments.
+  The World Editor passes custom script through printf: `% e`, `% d` turn into
+  garbage and `% s` crashes the editor on save. Use `\037` inside strings
+  (it is `%` at runtime, so it also works in Lua patterns and `string.format`),
+  and use `math.fmod(a, b)` instead of `a % b`.
+  Check with: `Select-String -Path src\ashenvale_survivor.lua -Pattern '%'` (it should find nothing).
+- The map must be set to Lua: Scenario > Map Options > Script Language. If the
+  editor's temp folder (`map/*.w3mTemp`) contains `war3map.j`, the map is still on JASS.
+
+## Testing
+
+`python tools/smoketest/run.py` runs the script against mocked natives (needs `pip install lupa`).
+The Armory step (`no button under: Upgrade`) fails now and then because gear drops are random;
+run it again before deciding that a change broke it.
+
+## Standalone engine (engine/)
+
+`engine/` is a fork of [corepunch/open-realm](https://github.com/corepunch/open-realm)
+(C reimplementation of Warcraft III), on branch `survivor`. The goal is a standalone
+survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
+
+- Build: MSYS2 UCRT64 at `C:\msys64` (gcc, make, SDL2, zlib, libepoxy, diffutils).
+  `powershell -ExecutionPolicy Bypass -File tools\build-windows.ps1 -Jobs 8` from `engine/`.
+- Game data: `C:\Program Files (x86)\Warcraft III (Legacy)` (1.29.2, MPQ, no War3Patch.mpq).
+- Run: `dist\windows\openwarcraft3.exe -data "C:\Program Files (x86)\Warcraft III (Legacy)" -tft +map "Maps/FrozenThrone/(2)EchoIsles.w3x"`.
+  **`-tft` is required**: without it the engine hides `War3x*.mpq` and every TFT asset is "not found".
+- Screenshots: add `+screenshot <frames>`; the engine writes `dist\windows\screenshots\shotNNNN.jpg`.
+  Never capture the desktop: it shows the user's own windows.
+- The engine's own agent rules are in `engine/AGENTS.md` (Quake 2 style, game logic stays in
+  `games/warcraft-3/game/`, abilities in `skills/s_*.c`).
+- Play: `engine\dist\windows\play_survivor.bat` (borderless window over the desktop,
+  `vid_fullscreen 2`, so Alt+Tab does not minimize or switch modes; the menu loads behind a black
+  screen, entering a zone shows that zone's loading screen).
+- Tester build: `powershell -ExecutionPolicy Bypass -File tools\release\make_release.ps1` writes
+  `release\WarcraftSurvivors.exe` (7-Zip SFX, ~4 MB: engine + `src/` scripts + `Play Warcraft Survivors.bat`,
+  which finds or asks for the tester's own 1.29 install and keeps it in `wc3path.txt`). No Blizzard data inside.
+- Quick rebuild without the broken packaging step: from MSYS2 UCRT64 in `engine/`,
+  `make -j8 OS=Windows_NT BIN_DIR=build-windows/bin LIB_DIR=build-windows/lib openwarcraft3`, then copy
+  `build-windows\bin\openwarcraft3.exe` and `build-windows\lib\*.dll` into `dist\windows\`.
+  From the Bash tool: `C:/msys64/usr/bin/env.exe MSYSTEM=UCRT64 OS=Windows_NT CHERE_INVOKING=1 /usr/bin/bash -lc 'make ...'`.
+  Without `OS=Windows_NT` the libraries link as programs (`undefined reference to WinMain`).
+  After editing `src/*.lua`, copy them to `dist\windows\share\warcraft-3\Scripts\Survivor\`.
+- MPQ files: `build-windows\bin\mpqtool.exe -data <Legacy dir> cat <path>` (put `build-windows\lib`
+  on PATH first). The full file list is `engine\tools\WarcraftIIIFileListZezulaLadik.txt`.
+- Scripted input for tests: `+exec test_play.cfg` (in `share\warcraft-3\`) sends `oskey <key> <down>`
+  commands after `wait` frames, like a player pressing Space, 1-4, WASD. A file with more than a
+  few KB of `wait`s overflows the command buffer: chain files with `exec next.cfg` (see
+  `flow_test*.cfg`: menu, forced camera scroll, Space into Ashenvale, cards, HUD, with screenshots).
+- `python tools/engine_flow.py <name> w300 s k27 d100 w60 u100 ...` writes a chained `<name>.cfg`
+  (w = wait frames, s = screenshot, k = tap key, d/u = key down/up, engine key codes); run it with
+  `+exec <name>.cfg`. **Always add `+set vid_hidden 1`** to test runs (the window otherwise takes
+  focus and receives whatever the user is typing), and `+set com_maxfps_background 0` so waits keep
+  their pace. A hidden window renders at 1280x720.
+- Test scripts in `Scripts\Survivor\` (each replaces the map's main; run alone as `wc3_lua_script`):
+  `test_models.lua` (every hero preview model in one grid), `test_zone_shot.lua` (arena shot for a
+  zone thumbnail), `test_weapon.lua` (prints the weapon fields of a few heroes), `test_trees.lua`
+  (probes trees with an item: every tree must move it). Their source is `tools/engine_tests/`
+  (versioned); copy them to `dist` like the `src/` scripts.
+
+## GitHub (open source, since 2026-10-30)
+
+- The user commits and pushes with GitHub Desktop; Claude only prepares files and checks them.
+- This folder is one repository (MIT, Willios). `engine/` is **not** in it: it is its own repository,
+  the open-realm fork on branch `survivor`, published as the user's fork on GitHub.
+- **Never commit `release/`**: the portable build bundles the user's Warcraft III install
+  (`War3.mpq`...). No `*.mpq`, no extracted Blizzard files, no zone thumbnails (screenshots of
+  Blizzard maps). Tester builds go to GitHub Releases (the 4 MB SFX has no Blizzard data).
+- `engine/dist/` is build output and ignored in the engine repository; anything hand-written that
+  lives only there must move into the main repository.
+- Tests load and may save the real profile (`%APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\profile.pld`):
+  back it up first and compare after.
+- Loading screens never reach `+screenshot`; capture only the game window with `PrintWindow`.
+- Test aids: `+set survivor_tab codex` opens a lobby tab; `+set survivor_menu keys` opens the options
+  at a page (`main`, `audio`, `keys`, `interface`); `+set survivor_run "5 1 1 2"` (hero, zone,
+  difficulty, key) starts that run directly on the arena map; adding
+  `Scripts/Survivor/test_defeat.lua` to `wc3_lua_script` kills the hero after 4 s (end screen).
+  The server runs at 10 Hz (`FRAMETIME` 100 ms): count screenshot waits in client frames.
+- On a clean exit the engine archives cvars into `%APPDATA%\warcraft-3\config.cfg` (the old
+  windowed launcher left `vid_fullscreen "0"` there). Test runs that are killed write nothing.
+
+### How the survivor script runs in the engine
+
+The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on branch `survivor`):
+
+- `games/warcraft-3/game/g_lua.c`: Lua 5.4 host. Unknown Lua globals resolve to JASS natives,
+  Blizzard.j functions and JASS globals; arguments convert by the native's `common.j` signature.
+  Lua functions passed as `code` become native `jassFunc_t` records (trampoline). Handles are
+  userdata keyed by pointer (edicts: slot + spawn time; enums: type + value). Calls run with the
+  local human as `GetLocalPlayer()`. Runs `war3map.lua` maps, or `wc3_lua_script` files on any map.
+- `games/warcraft-3/game/api/api_reforged.h`: natives newer than 1.29 `common.j` (frames, keys,
+  unit/effect setters) plus their declarations, loaded right after `common.j`.
+- `games/warcraft-3/game/hud/hud_script_frames.c`: `BlzCreateFrameByType` pool drawn on
+  `LAYER_GAME_4` (`UIFLAG_PAINT_ORDERED` keeps tree order); clicks come back as `scriptframe`,
+  pointer enter/leave as `scriptframehover` (client side: `SCR_LayoutScriptHover` in `cl_scrn.c`).
+  A BACKDROP created with a template name (`EscMenuBackdrop`, `QuestButtonBaseTemplate`,
+  `EscMenuButtonBackdropTemplate`, ...) copies that FDF backdrop (`UI_BackdropTemplate` in
+  `hud/hud.c`) and draws with its edge file; `BlzFrameSetTexture` replaces only its background
+  (its `blend` argument decides whether the background keeps its alpha).
+  `BlzFrameSetAllPoints(world frame, game UI)` sets `PS_UIFLAG_FULL_WORLD`: the 3D view fills the window.
+  `SPRITE`/`MODEL` frames take `BlzFrameSetModel`: the model plays Stand inside the frame (client
+  `FT_MODEL`, `SCR_LayoutDrawPortrait`) seen from the front (models face +X; camera yaw -20 deg), fitted
+  to its bind-pose body (`G_GetModelBindBounds` in `g_model.c`: geosets hidden at Stand start and flat
+  ground decals such as the hero glow are skipped, 1st..99th percentile per axis). The file's sequence
+  extents are padded (most heroes' include the glow), which made half the heroes look far away.
+  `EngineFrameSetTeamColor(frame, color)` (engine-only native) sets its team color.
+  Template lookups search `EscMenuTemplates`, `QuestDialog`, `StandardTemplates`, `BattleNetTemplates`
+  and `DialogWar3.fdf` (the riveted iron `DialogBackdrop`); the Battle.net heavy/light corner
+  templates have no texture in 1.29 (magenta).
+- `games/warcraft-3/game/g_preload.c`: `PreloadGenClear`/`Preload`/`PreloadGenEnd` write retail-format
+  preload files to `%APPDATA%\warcraft-3\CustomMapData\`; `Preloader` runs their `//!beginusercode`
+  Lua block; `BlzSetAbilityTooltip`/`BlzGetAbilityTooltip` round-trip. The profile saves and loads this way.
+- `EngineUnitModel(unitId)` (Lua, engine only) returns a unit type's model file (for the lobby portrait).
+- `EngineCvar(name[, value])` (Lua, engine only) reads/sets console variables, which survive a map
+  change. The script uses it to hand the chosen run from the menu map to the zone map and to style
+  the zone's loading screen: `wc3_loading_quiet 1` (black), `wc3_loading_title/_subtitle/_text`,
+  `wc3_loading_background` (row of `[LoadingScreens]` in `UI\WorldEditData.txt`; 34 = Ashenvale).
+  The menu map and the zone arenas are listed in `SURVIVOR_ENGINE` in `src/engine_boot.lua`.
+- `games/warcraft-3/game/g_oskey.c`: `BlzTriggerRegisterPlayerKeyEvent`; the client forwards keys
+  as `oskey` when `PS_UIFLAG_FORWARD_KEYS` is set. `oskey` takes **engine** key codes: letters are
+  lowercase ASCII (`d` = 100, `w` = 119), Escape 27, Space 32; uppercase codes are silently ignored.
+- `EngineQuit()` (Lua, engine only) quits like the main menu's Quit (cvars are archived).
+- Layered animation (engine only, World of Warcraft style): `EngineUnitUpperAnimation(unit, name[, speed])`
+  plays a one-shot clip (attack, spell) on the bones from the chest up while the legs keep the base
+  animation (walk); `''` ends it. Server: `edict.upper_animation`, `G_RunUpperAnimation` in `g_model.c`,
+  sent as `entityState_t.upper_frame` (0 = none). Renderer: `MDLX_BindBoneMatricesUpper` in
+  `r_mdx_anim.c` blends those bones in over 120 ms and out over 200 ms; the upper body is a node
+  named like `Bone_Chest` (not a horse's) and everything under it (`MDLX_FindUpperBody`, found at
+  load); without one the clip plays on the whole model. The hero swings and casts this way while
+  walking (`G.heroSwing`, `R.upperAnim`); standing, it plays the whole-body sequence.
+- `EngineUnitAnimation(unit)` (test aid) returns the sequence name, frame and upper clip the engine plays.
+- Movement/animation test: `Scripts/Survivor/test_moveanim.lua` steers the hero with the same orders
+  a right-click gives (re-clicks every 0.4 s, a tree click at 20 s) and logs `MOVEANIM` lines (sequence,
+  upper clip, position) for 30 s. Run it with `+set survivor_run "5 1 1 2"` and `+exec pickcards.cfg`
+  (presses 1 about once a second so level-up cards do not pause the run).
+  **Use real input for input bugs:** `python tools/engine_clicks.py realclicks 0 -256 500 300 20 150`
+  writes cfgs that send the client's own right-click command (`cmd smartpoint X Y`) around the spawn
+  and pick cards; run with `+exec realclicks.cfg` and `+set moveanim_clicks 0` (the add-on then only logs).
+- `vid_aspect` (cvar, set by the client in `cl_main.c` whenever the window size changes): the
+  frame space is 0.6 high and centered on x 0.4, so the screen spans `0.4 +- 0.3 * vid_aspect`.
+  It is empty for the first frames of a map: the HUD re-checks it every update (`Hud.edges`).
+- Sound groups (`sound/s_sound.c`, `S_SetGroupVolumes`): each sound file is scaled by its group's
+  cvar, by path: `Abilities\` -> `s_spellvolume`, `Sound\Ambient\` and `Doodads\` -> `s_ambiencevolume`,
+  `Units\` and `Sound\Units\` -> `s_unitvolume`; music is `s_musicvolume`. The options menu sets them.
+- `SetUnitAnimation` with a looping sequence (walk, stand) sets `UNIT_FLAG_ANIMATION_OVERRIDE`, and
+  `M_MoveFrame` loops it instead of letting the unit's move pick its own clip (the hero's walk used
+  to turn back into stand after one cycle). One-shots (attack) still end normally.
+- Weapon field constants (`UNIT_WEAPON_RF_ATTACK_RANGE`, `_PROJECTILE_SPEED`, `UNIT_WEAPON_SF_ATTACK_PROJECTILE_ART`)
+  and their types are declared in `api_reforged.h`. Before that they were nil: every hero was
+  read as melee (no missile, stop-and-swing), and passing nil to the native crashed the engine.
+- Controls (script): Escape opens a WoW-style game menu (buttons stacked; Audio, Keybinds and
+  Interface open their own page, Escape goes back). Movement is mouse (right-click) **or** keyboard
+  (`Profile.data.opts.wasd`), never both; the mouse path in `G.updateMovement` is unchanged.
+  Bindings: `ACTIONS` (default key codes = OSKEY values, Windows VK), saved in `Profile.data.binds`
+  only when not default; binding a taken key swaps the two. Every key in `KEY_LIST` is registered.
+  The starting spell is chosen per hero in the lobby pool (`Profile.data.starts`, `G.startSpell`).
+- **Fixed 2026-10-29:** non-permanent text tags were never freed on the server, so after 100 damage
+  numbers `CreateTextTag` failed for the rest of the map (`G_RunTextTags` in `g_multiboard.c`).
+- `UnitDamageTarget` with a weapon type now plays that weapon's impact sound on the target's armor,
+  as retail does (`G_PlayWeaponImpactSound` in `g_sound.c`). The hero's auto-attack passes its
+  weapon type, read with `BlzGetUnitWeaponIntegerField(u, UNIT_WEAPON_IF_ATTACK_WEAPON_SOUND, 0)`
+  (declared in `api_reforged.h`). Before, scripted hits were silent: only enemy hits clashed.
+  `test_hitfx.lua` prints the hero's weapon sound type and churns 250 short-lived text tags.
+- **Fixed 2026-10-29, sound:** the renderer skipped a model's events on its first sighting (meant for
+  units scrolling into view), so every fresh spell effect lost its sound, keyed at the start of its
+  sequence. A world model first seen within `WC3_EVENT_FRESH_MS` (250 ms) of its sequence start now
+  fires its opening keys (`R_W3DispatchModelEvents` in `renderer/r_game.c`). Effects whose model has
+  no SND event (Blizzard, Rain of Fire, Wind Walk, Impale) play a label from `AbilitySounds.slk` via
+  `G.sound` (`def.sound` on cast, `def.waveSound` per wave).
+- Script frames stack by (level, creation order) among siblings (`SF_BuildTree`); the smoke test's
+  `MOCK.click` now picks the topmost button the same way.
+- `BlzGetAbilityIcon` on an upgrade rawcode returns its per-level art list (`A.blp,B.blp,...`); the
+  script keeps the first entry.
+- Lobby title: `src/art/title.tga` (1024x128, WC3-logo style from the game's Friz Quadrata), made by
+  `python tools/make_title.py <FRIZQT__.TTF> src/art/title.tga [preview.png]`; extract the font with
+  `mpqtool cat 'Fonts\FRIZQT__.TTF'` and undo the `\r\n` translation. Engine only; Reforged shows gold text.
+- Difficulty: Normal / Heroic / Mythic / Mythic+ (no cap, no affixes since 2026-10-29), opened per zone
+  by winning the one before. The lobby button opens a window listing all four (`Lobby.buildDifficulty`);
+  `+set survivor_menu difficulty` opens it for screenshots. Zone `power` climbs 0.7 (Ashenvale) to 3.3
+  (Northrend); `density` thins the horde in the first two zones.
+- Volume: a Master row drives `s_volume` (all effects, including sound kits and interface sounds that
+  bypass the groups) and multiplies the music; every slider is squared (audio taper), so 10 is -40 dB.
+- Zone thumbnails: `src/art/zone_*.tga` (512x256 crops of an arena shot, see `test_zone_shot.lua`),
+  copied to `dist\windows\share\warcraft-3\Scripts\Survivor\`. Engine only; Reforged shows the campaign art.
+- `games/warcraft-3/jass/jdo.c`: small public bridge API (native function records, pinned refs,
+  signature access) and coroutines that can run native callbacks.
+
+### Engine problems found (open or worked around)
+
+- **Fixed 2026-10-29, art:** `DestroyEffect` freed an effect at once when its model had no Death
+  sequence, so caster art made and destroyed in one call (Thunder Clap, War Stomp, Mirror Image: one
+  one-shot Birth/Stand only) never showed. It now finishes the playing one-shot first (`G_DestroyEffect`
+  in `g_effects.c`). Effects with neither Birth nor Stand (AvatarCaster: only Spell) play their first
+  sequence (`G_GetFirstAnimation`); a looping Birth with no Stand (the dragon-missile xp gems) keeps
+  looping instead of being freed after 0.5 s.
+- **Fixed 2026-10-29, gameplay:** a Lua handle to a freed effect still reached its edict slot, and a new
+  enemy in that slot was moved by the script (the magnet pulled enemies). Lua handles now remember the
+  edict's spawn time and pass null when the slot was reused (`g_lua.c`).
+- **Fixed 2026-10-29, animation:** every native order (`unit_setmove` in `g_ai.c`) resets the unit's
+  animation, and the native walk then flips it between stand and walk until the script's `stop`
+  lands 1-2 server frames later. Each right-click cut Bladestorm's spin. Replaying the spin after the
+  `stop` did not help. Fix: `EngineUnitScriptOrders(unit, true)` (`UNIT_FLAG_SCRIPT_ORDERS`,
+  `m_unit.c`): move/smart/attack/patrol/stop/holdposition orders only raise their events, no native
+  behavior starts. The hero uses it; the Reforged path still cancels with `stop`.
+- **Fixed 2026-10-29, input:** a real right-click on the ground (`smartpoint` client command ->
+  `move_selectlocation` in `skills/s_move.c`) called `order_move` directly and raised **no order
+  event**: in the engine the hero always walked natively and the script's movement never ran. Script
+  orders (`IssuePointOrder`) take another path (`G_IssueUnitPointOrder`), so tests using them missed it.
+  For `UNIT_FLAG_SCRIPT_ORDERS` units the click is now published as a `smart` point order. Other units
+  still raise no event on a ground right-click (retail does): open.
+- **Fixed 2026-10-29, gameplay:** a right-click on a tree, doodad or item is a target order with no
+  point; `GetOrderPointX/Y` returned (0, 0), the middle of Moonglade, and the hero walked back to the
+  spawn. The script now reads `GetOrderTarget()` with `GetWidgetX/Y` (separate point and target triggers).
+- **Fixed 2026-10-30, gameplay:** the hero walked through trees. Its walk check (`G.walkable`) drops a
+  hidden item with `SetItemPosition` and reads it back; retail pushes the item off trees, the engine
+  put it exactly where asked. `SetItemPosition` now moves the item to the nearest free cell of the
+  static pathing map (terrain plus baked buildings and destructables,
+  `CM_ClosestStaticPathablePointForRadius` in `server/sv_routing.c`). `IsTerrainPathable` still reads
+  only the terrain map. `test_trees.lua`: 8 of 8 Moonglade trees move the probe.
+- Zones: the script has 6 (Ashenvale, Westfall, The Barrens, Plaguelands, Felwood, Northrend); the
+  engine has one arena map (Moonglade), so zones 2-6 play there with their own enemies, fog and music.
+- `GetTriggerEventId` is a stub in the engine (always null): do not branch on it; register one
+  trigger per event instead.
+- `Abilities\Spells\Orc\WindWalk\WindWalkCaster.mdl` does not exist in 1.29 (Wind Walk fades the hero).
+- The Lua host has no `debug` library: test add-ons cannot reach the script's locals. Use cvar test
+  aids instead, e.g. `+set survivor_spells "thunder_clap mirror_image"` (extra spells at run start).
+
+- **Fixed 2026-10-29, gameplay:** damage triggers now run during the hit (`G_RunDamageTriggers` in
+  `g_events.c`, called from `T_DamageInternal`), so `BlzSetEventDamage` changes the damage taken
+  (dodge, damage reduction, extra lives work).
+- **Fixed 2026-10-29, gameplay:** periodic timers fired at most once per 100 ms frame, so the
+  script's 0.03125 s tick ran at a third of real speed (hero slow, enemies at full speed). They
+  now fire once per elapsed period (`G_RunTimers`, at most 16 per frame).
+- **Fixed 2026-10-29, gameplay:** `IsTerrainPathable` always answered "blocked": every spawn
+  fell back to a random point next to the hero and WASD probes failed. It now reads the
+  terrain pathing map (walk, float); other pathing types report pathable.
+- **Fixed 2026-10-29:** `EnableUserControl(false)` blocked camera input on the server only; the
+  client kept predicting scroll and zoom, so the view drifted. It now sets `PS_UIFLAG_NO_CAMERA`.
+- **Fixed 2026-10-29:** the FDF frame pool (`MAX_UI_CLASSES`, was 2048) overflowed when script
+  templates loaded the glue template files, and the engine then crashed. Now 4096.
+- **Open, UI:** the portrait/minimap origin frames are not drawn where the script places them
+  (the minimap is off now: `CFG.SHOW_MINIMAP = false`).
+- **Fixed 2026-10-29:** black band under the world (the viewport stopped above the console), no
+  mouse enter/leave frame events, `Preload*` natives were no-ops (no saved profile).
+- **Open:** `SetCameraBounds` with a small rect moves the camera off its target. The lobby no
+  longer uses the world (gradient background, model frame portrait), so this only matters for maps.
+- **Fixed 2026-10-29, art:** the magenta armory icons were upgrade rawcodes whose icon is a
+  comma-separated list. Gear is now Warcraft III items (`ZONE_ITEMS`), all checked in 1.29 `ItemFunc.txt`.
+- **Alt+Tab (2026-10-29, untested by the user yet):** the borderless window is now one row taller
+  than the display (an exact-fit GL window is promoted to exclusive fullscreen by Windows/drivers,
+  which blanked and stalled the desktop on Alt+Tab), and the frame rate drops to
+  `com_maxfps_background` (20) while the window has no focus.
+- **Map load cost:** about 1.3 s game init per process plus 3.7 s per map load, whatever the map
+  size (Echo Isles took as long as Moonglade). A second load in the same process took about 4 s.
+- **Open:** each distinct Lua callback closure allocates a `jassFunc_t` that is never freed.
+  A native that raises a JASS runtime error (longjmp) while called from Lua would skip Lua frames.
+
+- **Upstream Windows build broken (fixed locally):** `common/map_load_debug.h` included
+  `<windows.h>`, whose `SetRect`/`GetClassName` clash with WC3 game symbols. Now includes
+  `<windef.h>` + `<winbase.h>` only.
+- **`tools/build-windows.ps1` DLL bundling fails** because the project path has spaces.
+  Workaround: run `dist-scripts/windows/bundle_mingw_dlls.sh dist/windows build-windows/bin/openwarcraft3.exe build-windows/lib/*.dll`
+  from MSYS2 with relative paths, then copy `build\share` to `dist\windows\share`.
+- **Intermittent black world at start (open):** sometimes only the HUD draws (terrain is
+  submitted, screen stays black, minimap camera outline is squashed). Not fog related.
+  Not reproduced in 6 later runs. Parked by the user on 2026-10-29.
+- **Reforged map formats:** `map/WarcraftSurvivor.w3m` loads (terrain, camera), but
+  `war3map.doo` v13/11 and `war3mapUnits.doo` v13/9 are rejected (`unsupported war3map.doo version`),
+  and `war3map.lua` is ignored (the engine only runs `war3map.j`). Custom maps go in
+  `dist\windows\share\warcraft-3\Maps\` (the `-data` folder's `Maps\` also works).
+- **Reforged-saved terrain renders broken** (stretched streaks under the camera) on
+  `map/WarcraftSurvivor.w3m`. Not investigated: arenas are official maps now (the user's choice),
+  run with `+set wc3_lua_script "Scripts/Survivor/ashenvale_survivor.lua,Scripts/Survivor/engine_boot.lua"`
+  and e.g. `+map "Maps/FrozenThrone/(6)Moonglade.w3x"` (Ashenvale tileset). The scripts are copied
+  from `src/` to `dist\windows\share\warcraft-3\Scripts\Survivor\`.
+- **Rawcode byte order:** the engine reads `'Hamg'` as a little-endian integer (string byte
+  order), retail is big-endian. The Lua bridge's `FourCC` uses `string.unpack('<I4', s)`;
+  any code that builds rawcodes by hand must do the same.
+- **EVENT_PLAYER_UNIT_DAMAGED** is missing from 1.29 `common.j`; it is declared in the
+  engine's Reforged declarations (`api/api_reforged.h`). `TriggerRegisterPlayerUnitEvent` crashed on
+  a null event before a guard was added.
+- Melee map strings show raw keys (`CRIPPLE_TIMER_HUMAN`) with the French locale MPQs.
+
+## Mistakes log
+
+Every mistake Claude makes in this project is recorded here, with the lesson.
+
+**Rule: if you break anything, note it here.** Whenever a change of yours breaks something that
+worked (a feature, a test, the build, the editor save, the user's profile), add an entry right away,
+even if you fixed it in the same session: date, what broke, why, and the lesson.
+
+- **2026-10-29:** Bladestorm "fixed" (spin replayed after the `stop`) and handed over without any test
+  that moved the hero; the user found it still cancelled on the first step. A trace showed the native
+  walk overriding the animation before the `stop` even ran. Lesson: when a test cannot exercise the
+  input, build one that can (`IssuePointOrder` on the hero = a right-click, `EngineUnitAnimation` to
+  read the result) before calling it fixed.
+- **2026-10-29:** The second Bladestorm/attack fix was verified only with `IssuePointOrder` from a
+  test script and handed over as working; the user saw no change, because a real right-click takes a
+  different engine path (`smartpoint` -> `move_selectlocation`, no order event, native walk). Lesson:
+  test input bugs through the real client command (`cmd smartpoint`, `tools/engine_clicks.py`), not a
+  script-issued order that only looks equivalent.
+- **2026-10-29:** `rm -f` emptied `engine/dist/windows/screenshots/` before a screenshot run without
+  looking at what was there (older test shots). Lesson: list a folder before deleting from it, or
+  write new shots elsewhere.
+- **2026-10-29:** An engine test add-on used `debug.getupvalue` to reach the script's `G`; the engine's
+  Lua has no `debug` library and the run was wasted. Lesson: engine test hooks go through cvars
+  (`EngineCvar`), as `survivor_tab`/`survivor_run` do.
+
+- **2026-10-29:** A Python script passed through a Bash heredoc matched `'ui\\framedef'` against
+  file paths and found nothing (the heredoc changed the backslashes), and a long heredoc with
+  quotes failed to parse at all. Lesson: write any script with backslashes or many quotes to a
+  file with the Write tool and run the file (repeat of the 2026-10-29 backslash lesson).
+- **2026-10-29:** The hero losing health fast was first taken for the `BlzSetEventDamage` no-op.
+  The real causes were a stub `IsTerrainPathable` (spawns next to the hero) and timers running
+  at a third of real speed. Lesson: log the actual hits and the clock before naming a cause.
+
+- **2026-10-29:** The new stacked options menu could not be clicked (lobby and run): its full-screen
+  click blocker (`UI.hit`, level 8) was a sibling of the page groups and stacked above them. The
+  smoke test passed because `MOCK.click` ignored frame levels, and the engine check only took
+  screenshots. Lesson: when frames move under new parent groups, check what lies above them; the
+  mock now models the engine's stacking.
+- **2026-10-28:** The Lua source used `%` in display text, patterns and modulo, which
+  crashed the World Editor every time the code was pasted and saved. Lesson: test that the
+  source contains no `%` before handing it over (see the rule above).
+- **2026-10-28:** A smoke test failure was blamed on a fresh edit before checking whether
+  it reproduced on the original file. It was a flaky random-loot step. Lesson: run the
+  unchanged baseline before concluding that a change caused a failure.
+- **2026-10-29:** To check the engine, a screenshot of the whole desktop was taken; the game
+  was not in front, so it captured the user's browser. Lesson: use the engine's `screenshot`
+  command (or capture only the game window), never the full screen.
+- **2026-10-29:** C and Lua strings containing backslashes (`\n`, `\037`, `UI\\...`) were written
+  through a Bash heredoc into Python patch scripts; the backslashes collapsed, which broke the
+  engine build twice and turned a Lua pattern into control bytes. Lesson: make any edit that
+  contains a backslash with the Edit tool, and grep the result.
+- **2026-10-29:** A Python patch with `'\\037 power'` went through a Bash heredoc again; the
+  assert caught it before writing. Lesson: Edit tool or a script file, never a heredoc, for `\`.
+- **2026-10-29:** Movement tests sent `oskey 68` (uppercase D), which the engine ignores, and the
+  visible test window took focus: the hero moved with the user's own typing and the log looked like
+  a movement bug. Lesson: lowercase key codes, `vid_hidden 1`, and log positions before concluding.
+- **2026-10-29:** `mpqtool cat > file` corrupts binary files (stdout is in text mode, `\n` becomes
+  `\r\n`). Lesson: undo the translation or parse in the engine; do not trust a redirected binary.
+- **2026-10-29:** After the smoke test passed and the engine log showed the fix (music streaming),
+  a second multi-minute screenshot run was started just to watch an idle hero. The user stopped it.
+  Lesson: once the smoke test and one engine log line cover a change, stop and hand over for play;
+  do not chain screenshot runs to confirm behavior the user will check in seconds.
+- **2026-10-29:** The black world was blamed on fog after one run with fog disabled. `r_fog`
+  is WoW-only and six later runs with default settings rendered fine: the bug is intermittent.
+  Lesson: repeat a run several times and check the cvar is actually read before blaming it.
+# Test fast (background runs took WAY too long)
+
+- **Smallest check that covers the change, then stop.** Pure logic/UI: `CompileCheck` + one render
+  or the one sim for that area. Gameplay: the one sim for the touched level/kit. Net changes:
+- **Run independent checks in one parallel batch** (one background call, `&` + `wait`), never one
+  after another; start the slowest first and do other work meanwhile.
+- **Don't re-run** a passed check after an unrelated edit; re-run only what the edit touches.
+- **Dry runs first** where a tool has one; try variants as dry runs, bake once.
+- **No baselines by stash/rebuild** unless a failure is truly unexplained: read the logs first, add a
+  temporary print, rerun only the failing case.
