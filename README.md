@@ -58,9 +58,10 @@ Reforged's data does not work with the standalone engine.
 
 ### Download (Windows)
 
-1. Download `WarcraftSurvivors.exe` from the [Releases](../../releases) page (about 4 MB).
-2. Run it. It unpacks the game and asks once where Warcraft III 1.29 is installed.
-3. Play. Progress is saved in `%APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\`.
+*Coming soon.* The game is still in development; for now, build it from source (below).
+The download will be a small `WarcraftSurvivors.exe` (about 4 MB) on the Releases page: it
+unpacks the game and asks once where Warcraft III 1.29 is installed. Progress is saved in
+`%APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\`.
 
 ### Build from source (Windows)
 
