@@ -740,15 +740,17 @@ do
             art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Ashenvale-TopLeft.blp',
             thumb = 'Scripts\\Survivor\\zone_ashenvale.tga',
             fog = {0.10, 0.16, 0.22, 900, 4200}, time = 0.0,
-            desc = 'Night has fallen on the forest. Wolves run with the furbolgs and the satyrs of Felwood creep in from the north.',
+            desc = 'Night has fallen on the forest. Wolves run with the furbolgs, the satyrs of Felwood creep in from the north and the Sentinels shoot at every stranger.',
             enemies = {
                 {id = 'nwlt', hp = 40, dmg = 6, xp = 1, from = 0, til = 6, w = 4},
                 {id = 'nfrl', hp = 70, dmg = 8, xp = 1, from = 0, til = 7, w = 3},
                 {id = 'nsty', hp = 60, dmg = 8, xp = 1, from = 1, til = 8, w = 3},
                 {id = 'nfrs', hp = 60, dmg = 9, xp = 2, from = 2, w = 2},
+                {id = 'earc', hp = 55, dmg = 9, xp = 2, from = 2, w = 2, extra = true},
                 {id = 'nwlg', hp = 110, dmg = 11, xp = 2, from = 3, w = 3},
                 {id = 'nsat', hp = 90, dmg = 11, xp = 2, from = 4, w = 2},
                 {id = 'nfrb', hp = 140, dmg = 14, xp = 3, from = 5, w = 3},
+                {id = 'esen', hp = 150, dmg = 14, xp = 3, from = 5, w = 2, extra = true},
                 {id = 'nsts', hp = 160, dmg = 15, xp = 3, from = 6, w = 2},
                 {id = 'nfre', hp = 180, dmg = 16, xp = 3, from = 7, w = 2},
                 {id = 'nwld', hp = 220, dmg = 18, xp = 3, from = 8, w = 3}
@@ -764,15 +766,18 @@ do
         {name = 'Westfall', subtitle = 'The Defias Uprising', tier = 2, power = 1.0, density = 0.9,
             music = {'Human1', 'Human2', 'Human3', 'HumanX1'},
             art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Lordaeron-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_westfall.tga',
             fog = {0.42, 0.34, 0.22, 1200, 5200}, time = 18.0,
-            desc = 'Kobolds pour out of the mines, murlocs crawl up from the coast and the Defias Brotherhood marches on the farms.',
+            desc = 'Kobolds pour out of the mines, murlocs crawl up from the coast and the Defias Brotherhood marches on the farms with the farmhands it bought.',
             enemies = {
                 {id = 'nkob', hp = 45, dmg = 6, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'hpea', hp = 40, dmg = 6, xp = 1, from = 0, til = 6, w = 2, extra = true},
                 {id = 'nmrl', hp = 50, dmg = 7, xp = 1, from = 0, til = 7, w = 3},
                 {id = 'ngno', hp = 60, dmg = 8, xp = 1, from = 1, til = 8, w = 3},
                 {id = 'nkog', hp = 70, dmg = 9, xp = 2, from = 2, w = 2},
                 {id = 'nmrr', hp = 100, dmg = 11, xp = 2, from = 3, w = 3},
                 {id = 'nban', hp = 110, dmg = 12, xp = 2, from = 3, w = 3},
+                {id = 'hrif', hp = 90, dmg = 12, xp = 2, from = 4, w = 2, extra = true},
                 {id = 'ngnb', hp = 150, dmg = 14, xp = 3, from = 5, w = 2},
                 {id = 'nrog', hp = 160, dmg = 15, xp = 3, from = 6, w = 3},
                 {id = 'nenf', hp = 230, dmg = 18, xp = 3, from = 7, w = 2},
@@ -789,17 +794,20 @@ do
         {name = 'The Barrens', subtitle = 'Razormane Stampede', tier = 3, power = 1.4,
             music = {'Orc1', 'Orc2', 'Orc3', 'OrcX1'},
             art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Barrens-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_barrens.tga',
             fog = {0.55, 0.40, 0.22, 1500, 6000}, time = 13.0,
-            desc = 'The quilboar of Razorfen ride with Kolkar centaurs, and harpies circle overhead looking for stragglers.',
+            desc = 'The quilboar of Razorfen ride with Kolkar centaurs, Grimtotem tauren join the raid and harpies circle overhead looking for stragglers.',
             enemies = {
                 {id = 'nrzs', hp = 55, dmg = 7, xp = 1, from = 0, til = 6, w = 4},
                 {id = 'nhar', hp = 50, dmg = 7, xp = 1, from = 0, til = 7, w = 3},
                 {id = 'ncer', hp = 70, dmg = 9, xp = 1, from = 1, til = 8, w = 3},
                 {id = 'nrzb', hp = 110, dmg = 11, xp = 2, from = 2, w = 3},
+                {id = 'ohun', hp = 80, dmg = 11, xp = 2, from = 2, w = 2, extra = true},
                 {id = 'nhrr', hp = 90, dmg = 11, xp = 2, from = 3, w = 2},
                 {id = 'ncea', hp = 100, dmg = 12, xp = 2, from = 3, w = 2},
                 {id = 'ncen', hp = 160, dmg = 15, xp = 3, from = 5, w = 3},
                 {id = 'nrzm', hp = 150, dmg = 15, xp = 3, from = 6, w = 2},
+                {id = 'otau', hp = 280, dmg = 18, xp = 3, from = 6, w = 2, extra = true},
                 {id = 'nhrw', hp = 170, dmg = 17, xp = 3, from = 7, w = 2},
                 {id = 'ncim', hp = 260, dmg = 20, xp = 3, from = 8, w = 3}
             },
@@ -814,6 +822,7 @@ do
         {name = 'Plaguelands', subtitle = 'The Scourge Rises', tier = 4, power = 1.9,
             music = {'Undead1', 'Undead2', 'Undead3', 'UndeadX1'},
             art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\LordaeronExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_plaguelands.tga',
             fog = {0.20, 0.30, 0.12, 800, 3600}, time = 0.0,
             desc = 'The dead walk the fields of Lordaeron. Ghouls lead the charge and abominations shamble behind.',
             enemies = {
@@ -824,7 +833,9 @@ do
                 {id = 'ugar', hp = 90, dmg = 11, xp = 2, from = 3, w = 2},
                 {id = 'uban', hp = 100, dmg = 12, xp = 2, from = 4, w = 2},
                 {id = 'unec', hp = 110, dmg = 13, xp = 2, from = 4, w = 2},
+                {id = 'umtw', hp = 140, dmg = 15, xp = 2, from = 5, w = 2, extra = true},
                 {id = 'uabo', hp = 300, dmg = 19, xp = 3, from = 6, w = 3},
+                {id = 'uobs', hp = 220, dmg = 17, xp = 3, from = 7, w = 1, extra = true},
                 {id = 'nfgu', hp = 280, dmg = 21, xp = 3, from = 8, w = 2}
             },
             bosses = {
@@ -838,15 +849,18 @@ do
         {name = 'Felwood', subtitle = 'The Burning Legion', tier = 5, power = 2.5,
             music = {'Doom', 'Tension', 'DarkAgents', 'IllidansTheme'},
             art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\AshenvaleExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_felwood.tga',
             fog = {0.28, 0.12, 0.32, 900, 4000}, time = 21.0,
-            desc = 'Fel fire burns the canopy. Voidwalkers and infernals answer the call of the satyr hellcallers.',
+            desc = 'Fel fire burns the canopy. Corrupted druids roam the dying woods, and voidwalkers and infernals answer the call of the satyr hellcallers.',
             enemies = {
                 {id = 'nsty', hp = 70, dmg = 8, xp = 1, from = 0, til = 6, w = 4},
                 {id = 'nvdl', hp = 80, dmg = 9, xp = 1, from = 0, til = 8, w = 3},
                 {id = 'nsts', hp = 110, dmg = 12, xp = 2, from = 2, w = 3},
+                {id = 'edoc', hp = 150, dmg = 13, xp = 2, from = 2, w = 2, extra = true},
                 {id = 'nvdw', hp = 160, dmg = 14, xp = 2, from = 3, w = 3},
                 {id = 'nstl', hp = 170, dmg = 15, xp = 3, from = 4, w = 2},
                 {id = 'nfgu', hp = 260, dmg = 19, xp = 3, from = 5, w = 3},
+                {id = 'nfel', hp = 240, dmg = 19, xp = 3, from = 6, w = 2, extra = true},
                 {id = 'nsth', hp = 240, dmg = 20, xp = 3, from = 7, w = 2},
                 {id = 'ninf', hp = 420, dmg = 24, xp = 4, from = 8, w = 2}
             },
@@ -860,7 +874,8 @@ do
 
         {name = 'Northrend', subtitle = 'The Frozen Throne', tier = 6, power = 3.3,
             music = {'LichKingTheme', 'ArthasTheme', 'SadMystery', 'UndeadX1'},
-            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Northrend-TopLeft.blp',
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\IcecrownExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_northrend.tga',
             fog = {0.55, 0.66, 0.82, 1000, 4600}, time = 0.0,
             desc = 'Ice trolls, Nerubians and the Scourge guard the road to Icecrown. The Lich King is waiting.',
             enemies = {
@@ -872,6 +887,7 @@ do
                 {id = 'nits', hp = 200, dmg = 17, xp = 3, from = 4, w = 3},
                 {id = 'nnwr', hp = 180, dmg = 17, xp = 3, from = 5, w = 2},
                 {id = 'uabo', hp = 340, dmg = 21, xp = 3, from = 6, w = 2},
+                {id = 'ubsp', hp = 320, dmg = 22, xp = 3, from = 7, w = 2, extra = true},
                 {id = 'nnws', hp = 360, dmg = 24, xp = 4, from = 8, w = 2}
             },
             bosses = {
@@ -880,12 +896,184 @@ do
                 {t = 360, id = 'Udea', name = 'Baron Rivendare', scale = 1.6, hp = 6500, dmg = 46},
                 {t = 480, id = 'ufro', name = 'Frost Wyrm', scale = 1.5, hp = 9500, dmg = 55}
             },
-            final = {id = 'Ulic', name = 'Kel\'Thuzad', scale = 1.9, hp = 26000, dmg = 70}}
+            final = {id = 'Ulic', name = 'Kel\'Thuzad', scale = 1.9, hp = 26000, dmg = 70}},
+
+        -- Zones 7-12 came later: they keep these indices in saves and gear ids,
+        -- and ZONE_ORDER below places them between the first six.
+        {name = 'Tirisfal Glades', subtitle = 'The Scarlet Crusade', tier = 2, power = 1.2, density = 0.95,
+            music = {'Comradeship', 'PursuitTheme', 'Human3', 'TragicConfrontation'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Quelthalas-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_tirisfal.tga',
+            fog = {0.40, 0.30, 0.20, 1100, 5000}, time = 17.0,
+            desc = 'The Scarlet Crusade purges the glades. Militia and footmen hold the line while priests and sorceresses keep them fighting.',
+            enemies = {
+                {id = 'hmil', hp = 50, dmg = 7, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'hfoo', hp = 65, dmg = 8, xp = 1, from = 0, til = 8, w = 4},
+                {id = 'hrif', hp = 55, dmg = 9, xp = 1, from = 1, til = 9, w = 3},
+                {id = 'nchp', hp = 70, dmg = 9, xp = 2, from = 2, w = 2},
+                {id = 'hmpr', hp = 60, dmg = 9, xp = 2, from = 2, w = 2},
+                {id = 'hsor', hp = 60, dmg = 10, xp = 2, from = 3, w = 2},
+                {id = 'hspt', hp = 140, dmg = 13, xp = 2, from = 4, w = 2},
+                {id = 'hkni', hp = 200, dmg = 16, xp = 3, from = 5, w = 3},
+                {id = 'hmtm', hp = 120, dmg = 15, xp = 3, from = 6, w = 2},
+                {id = 'hgry', hp = 240, dmg = 18, xp = 3, from = 7, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'hrif', name = 'Houndmaster Loksey', scale = 2.0, hp = 2600, dmg = 30},
+                {t = 240, id = 'Hamg', name = 'Arcanist Doan', scale = 1.6, hp = 4200, dmg = 38},
+                {t = 360, id = 'Hart', name = 'Herod the Scarlet Champion', scale = 1.6, hp = 6500, dmg = 46},
+                {t = 480, id = 'hmpr', name = 'High Inquisitor Whitemane', scale = 2.2, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Huth', name = 'Scarlet Commander Mograine', scale = 2.0, hp = 26000, dmg = 70}},
+
+        {name = 'Stranglethorn Vale', subtitle = 'The Gurubashi Empire', tier = 3, power = 1.65,
+            music = {'Orc2', 'NagaTheme', 'OrcX1', 'Tension'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\DrownedRuinsExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_stranglethorn.tga',
+            fog = {0.18, 0.32, 0.18, 1000, 4600}, time = 15.0,
+            desc = 'The Gurubashi trolls stir in their jungle temples. Headhunters and berserkers lead the charge, jungle stalkers hunt beside them and murlocs crawl up from the coast.',
+            enemies = {
+                {id = 'nftr', hp = 60, dmg = 8, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nmrl', hp = 55, dmg = 7, xp = 1, from = 0, til = 6, w = 3},
+                {id = 'ohun', hp = 65, dmg = 9, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'njg1', hp = 100, dmg = 11, xp = 2, from = 2, w = 3},
+                {id = 'nfsp', hp = 80, dmg = 11, xp = 2, from = 3, w = 2},
+                {id = 'otbk', hp = 140, dmg = 14, xp = 2, from = 4, w = 3},
+                {id = 'odoc', hp = 110, dmg = 13, xp = 2, from = 4, w = 2},
+                {id = 'nftb', hp = 160, dmg = 15, xp = 3, from = 5, w = 3},
+                {id = 'otbr', hp = 150, dmg = 16, xp = 3, from = 6, w = 2},
+                {id = 'njga', hp = 260, dmg = 20, xp = 3, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nftk', name = 'Bloodlord Mandokir', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'otbr', name = 'High Priestess Jeklik', scale = 2.2, hp = 4200, dmg = 38},
+                {t = 360, id = 'Orkn', name = 'Jin\'do the Hexxer', scale = 1.7, hp = 6500, dmg = 46},
+                {t = 480, id = 'nhyd', name = 'Gahz\'ranka', scale = 1.6, hp = 9500, dmg = 55}
+            },
+            final = {id = 'nwgs', name = 'Hakkar the Soulflayer', scale = 2.8, hp = 26000, dmg = 70}},
+
+        {name = 'Alterac Valley', subtitle = 'The Frostwolf Clan', tier = 4, power = 2.2,
+            music = {'OrcTheme', 'Orc3', 'War2IntroMusic', 'Comradeship'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Northrend-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_alterac.tga',
+            fog = {0.62, 0.68, 0.78, 1100, 5000}, time = 10.0,
+            desc = 'The Frostwolves defend their valley. Wolves and grunts storm through the snow, wind riders strike from the sky and the tauren break whatever is left.',
+            enemies = {
+                {id = 'nwwf', hp = 80, dmg = 9, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'ogru', hp = 100, dmg = 10, xp = 1, from = 0, til = 8, w = 4},
+                {id = 'ohun', hp = 80, dmg = 10, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'orai', hp = 140, dmg = 13, xp = 2, from = 2, w = 3},
+                {id = 'oshm', hp = 110, dmg = 12, xp = 2, from = 3, w = 2},
+                {id = 'nwwg', hp = 150, dmg = 14, xp = 2, from = 3, w = 2},
+                {id = 'owyv', hp = 170, dmg = 16, xp = 3, from = 4, w = 2},
+                {id = 'otau', hp = 320, dmg = 20, xp = 3, from = 5, w = 3},
+                {id = 'ocat', hp = 180, dmg = 18, xp = 3, from = 6, w = 2},
+                {id = 'nwwd', hp = 300, dmg = 22, xp = 3, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nwwd', name = 'Frostwolf Alpha', scale = 1.9, hp = 2600, dmg = 30},
+                {t = 240, id = 'ogru', name = 'Captain Galvangar', scale = 2.0, hp = 4200, dmg = 38},
+                {t = 360, id = 'nogl', name = 'Korrak the Bloodrager', scale = 1.8, hp = 6500, dmg = 46},
+                {t = 480, id = 'Otch', name = 'Warmaster Laggrond', scale = 1.6, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Odrt', name = 'Drek\'Thar', scale = 2.0, hp = 26000, dmg = 70}},
+
+        {name = 'Dalaran', subtitle = 'The Violet Citadel', tier = 5, power = 2.7,
+            music = {'BloodElfTheme', 'SadMystery', 'Human1', 'Comradeship'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\Dalaran-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_dalaran.tga',
+            fog = {0.36, 0.24, 0.46, 1000, 4600}, time = 20.0,
+            desc = 'The magi of Dalaran have closed their city. Rogue wizards, golems and summoned elementals guard the streets, and the blood elves answer only to their prince.',
+            enemies = {
+                {id = 'nwiz', hp = 70, dmg = 9, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'ngrk', hp = 110, dmg = 10, xp = 1, from = 0, til = 7, w = 3},
+                {id = 'nwzr', hp = 100, dmg = 12, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'hsor', hp = 100, dmg = 12, xp = 2, from = 2, w = 2},
+                {id = 'hspt', hp = 180, dmg = 15, xp = 2, from = 3, w = 3},
+                {id = 'narg', hp = 220, dmg = 16, xp = 2, from = 3, w = 2},
+                {id = 'nhym', hp = 140, dmg = 15, xp = 2, from = 4, w = 2},
+                {id = 'nwzg', hp = 220, dmg = 18, xp = 3, from = 5, w = 2},
+                {id = 'hdhw', hp = 200, dmg = 18, xp = 3, from = 6, w = 2},
+                {id = 'hwt3', hp = 320, dmg = 21, xp = 3, from = 6, w = 2},
+                {id = 'nggr', hp = 450, dmg = 24, xp = 4, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nwzd', name = 'Archmage Arugal', scale = 1.7, hp = 2600, dmg = 30},
+                {t = 240, id = 'nsgg', name = 'The Violet Construct', scale = 1.6, hp = 4200, dmg = 38},
+                {t = 360, id = 'nbel', name = 'Grand Magister Rommath', scale = 1.8, hp = 6500, dmg = 46},
+                {t = 480, id = 'Hant', name = 'Archmage Antonidas', scale = 1.7, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Hkal', name = 'Prince Kael\'thas', scale = 1.9, hp = 26000, dmg = 70}},
+
+        {name = 'Hellfire Peninsula', subtitle = 'The Fel Horde', tier = 5, power = 2.95,
+            music = {'Doom', 'TragicConfrontation', 'OrcX1', 'Tension'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\OutlandExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_hellfire.tga',
+            fog = {0.48, 0.20, 0.12, 1000, 4600}, time = 14.0,
+            desc = 'The Fel Horde marches out of Hellfire Citadel. Chaos grunts and wolf riders lead, warlocks call their felhounds and infernals fall from the burning sky.',
+            enemies = {
+                {id = 'ncpn', hp = 90, dmg = 10, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nchg', hp = 140, dmg = 12, xp = 1, from = 0, til = 8, w = 4},
+                {id = 'npfl', hp = 120, dmg = 12, xp = 1, from = 1, til = 8, w = 3},
+                {id = 'nchw', hp = 120, dmg = 13, xp = 2, from = 2, w = 3},
+                {id = 'nchr', hp = 200, dmg = 16, xp = 2, from = 3, w = 3},
+                {id = 'nfel', hp = 220, dmg = 18, xp = 3, from = 4, w = 2},
+                {id = 'nckb', hp = 300, dmg = 19, xp = 3, from = 5, w = 2},
+                {id = 'npfm', hp = 320, dmg = 21, xp = 3, from = 6, w = 2},
+                {id = 'nba2', hp = 380, dmg = 24, xp = 4, from = 7, w = 2},
+                {id = 'ninf', hp = 460, dmg = 26, xp = 4, from = 8, w = 2}
+            },
+            bosses = {
+                {t = 120, id = 'nchg', name = 'Watchkeeper Gargolmar', scale = 2.0, hp = 2600, dmg = 30},
+                {t = 240, id = 'Nbbc', name = 'Kargath Bladefist', scale = 1.6, hp = 4200, dmg = 38},
+                {t = 360, id = 'nbdk', name = 'Nazan', scale = 1.8, hp = 6500, dmg = 46},
+                {t = 480, id = 'nba2', name = 'Vazruden the Herald', scale = 1.6, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Nmag', name = 'Magtheridon', scale = 1.8, hp = 26000, dmg = 70}},
+
+        {name = 'The Black Temple', subtitle = 'Illidan\'s Army', tier = 6, power = 3.1,
+            music = {'IllidansTheme', 'NagaTheme', 'BloodElfTheme', 'DarkAgents'},
+            art = 'UI\\Glues\\Loading\\Backgrounds\\Campaigns\\OutlandExpansion-TopLeft.blp',
+            thumb = 'Scripts\\Survivor\\zone_blacktemple.tga',
+            fog = {0.16, 0.26, 0.14, 900, 4200}, time = 0.0,
+            desc = 'Illidan rules from the Black Temple. Naga rise from the moat, blood elves hold the halls and the Illidari are ready to die for their master.',
+            enemies = {
+                {id = 'nmpe', hp = 90, dmg = 10, xp = 1, from = 0, til = 6, w = 4},
+                {id = 'nnmg', hp = 120, dmg = 12, xp = 1, from = 0, til = 8, w = 4},
+                {id = 'nmyr', hp = 220, dmg = 15, xp = 2, from = 1, w = 3},
+                {id = 'nnsw', hp = 130, dmg = 14, xp = 2, from = 2, w = 2},
+                {id = 'nsnp', hp = 180, dmg = 16, xp = 2, from = 3, w = 2},
+                {id = 'hspt', hp = 220, dmg = 17, xp = 2, from = 3, w = 2},
+                {id = 'nwgs', hp = 200, dmg = 17, xp = 3, from = 4, w = 2},
+                {id = 'nbel', hp = 280, dmg = 20, xp = 3, from = 5, w = 2},
+                {id = 'nhyc', hp = 360, dmg = 22, xp = 3, from = 6, w = 2},
+                {id = 'nnrg', hp = 480, dmg = 26, xp = 4, from = 8, w = 3}
+            },
+            bosses = {
+                {t = 120, id = 'nnrg', name = 'High Warlord Naj\'entus', scale = 1.8, hp = 2600, dmg = 30},
+                {t = 240, id = 'ninf', name = 'Supremus', scale = 1.7, hp = 4200, dmg = 38},
+                {t = 360, id = 'Naka', name = 'Shade of Akama', scale = 1.8, hp = 6500, dmg = 46},
+                {t = 480, id = 'Hvsh', name = 'Lady Vashj', scale = 1.8, hp = 9500, dmg = 55}
+            },
+            final = {id = 'Eevi', name = 'Illidan Stormrage', scale = 1.7, hp = 26000, dmg = 70}}
     }
 
+    -- The order zones are played and unlocked in (ZONES indices). Saves keep
+    -- a zone's index; Profile.data.unlocked counts open places in this order.
+    local ZONE_ORDER = {1, 2, 7, 3, 8, 4, 9, 5, 10, 11, 12, 6}
+    for rank, zi in ipairs(ZONE_ORDER) do
+        ZONES[zi].rank = rank
+    end
+
     for _, zone in ipairs(ZONES) do
-        for index, e in ipairs(zone.enemies) do
-            e.index = index
+        -- index: the step on the zone's health ladder. Units marked extra (added
+        -- to a tuned roster later) share the step before them.
+        local step = 0
+        for _, e in ipairs(zone.enemies) do
+            if not e.extra or step == 0 then
+                step = step + 1
+            end
+            e.index = step
         end
         zone.final.t = CFG.RUN_LENGTH
     end
@@ -930,7 +1118,19 @@ do
         {{'ofir', 'Orb of Fire', 'area'}, {'odef', 'Orb of Darkness', 'damage'}, {'kpin', 'Khadgar\'s Pipe of Insight', 'cdr'},
             {'hval', 'Helm of Valor', 'armor'}, {'rhth', 'Khadgar\'s Gem of Health', 'health'}},
         {{'frgd', 'Frostguard', 'armor'}, {'ckng', 'Crown of Kings', 'damage'}, {'desc', 'Kelen\'s Dagger of Escape', 'move'},
-            {'ssan', 'Staff of Sanctuary', 'regen'}, {'ankh', 'Ankh of Reincarnation', 'gold'}}
+            {'ssan', 'Staff of Sanctuary', 'regen'}, {'ankh', 'Ankh of Reincarnation', 'gold'}},
+        {{'lnrn', 'Lion\'s Ring', 'crit'}, {'schl', 'Scepter of Healing', 'regen'}, {'shhn', 'Shield of Honor', 'armor'},
+            {'horl', 'Sacred Relic', 'xp'}, {'lhst', 'The Lion Horn of Stormwind', 'dr'}},
+        {{'shcw', 'Shaman Claws', 'damage'}, {'shtm', 'Shamanic Totem', 'regen'}, {'vddl', 'Voodoo Doll', 'lifesteal'},
+            {'rots', 'Scepter of the Sea', 'area'}, {'axas', 'Ancestral Staff', 'cdr'}},
+        {{'fwss', 'Frost Wyrm Skull Shield', 'armor'}, {'stwa', 'Sturdy War Axe', 'damage'}, {'klmm', 'Killmaim', 'crit'},
+            {'srtl', 'Serathil', 'attackSpeed'}, {'dtsb', 'Drek\'Thar\'s Spellbook', 'cdr'}},
+        {{'crys', 'Crystal Ball', 'pickup'}, {'arsh', 'Arcanite Shield', 'armor'}, {'mnsf', 'Mindstaff', 'area'},
+            {'ram4', 'Ring of the Archmagi', 'xp'}, {'gvsm', 'Gloves of Spell Mastery', 'cdr'}},
+        {{'srbd', 'Searing Blade', 'damage'}, {'frhg', 'Firehand Gauntlets', 'attackSpeed'}, {'hbth', 'Helm of Battlethirst', 'health'},
+            {'shdt', 'Shield of the Deathlord', 'dr'}, {'gldo', 'Orb of Kil\'jaeden', 'area'}},
+        {{'sksh', 'Skull Shield', 'armor'}, {'grsl', 'Grimoire of Souls', 'lifesteal'}, {'nspi', 'Necklace of Spell Immunity', 'dr'},
+            {'ocor', 'Orb of Corruption', 'damage'}, {'crdt', 'Crown of the Deathlord', 'gold'}}
     }
     local GEAR_UPGRADES = 6     -- steps on the upgrade track
     local GEAR_STEP_ILVL = 3    -- item levels per step
@@ -1106,9 +1306,10 @@ do
         function(p) return p.kills, 50000 end)
     achievement('survivor', 'Survivor', 'Win a run.', 'AHds', 'BTNDivineIntervention', 10,
         function(p) return p.wins, 1 end)
-    for zi, zone in ipairs(ZONES) do
+    for rank, zi in ipairs(ZONE_ORDER) do
+        local zone = ZONES[zi]
         achievement('zone' .. zi, zone.name, 'Defeat ' .. zone.final.name .. ' in ' .. zone.name .. '.', 'AHmt', 'BTNMassTeleport',
-            5 + zi * 5, function(p) return p.zoneWins[tostring(zi)] or 0, 1 end)
+            5 + rank * 5, function(p) return p.zoneWins[tostring(zi)] or 0, 1 end)
     end
     achievement('boss_hunter', 'Boss Hunter', 'Slay 25 bosses.', 'AHtb', 'BTNStormBolt', 15,
         function(p) return p.bosses, 25 end)
@@ -1341,8 +1542,15 @@ do
     function Profile.load()
         local ok, raw = pcall(FileIO.load, CFG.SAVE_FILE)
         Profile.data = Profile.decode(ok and raw or nil)
-        -- Saves from before the inventory carry their six best items.
         local p = Profile.data
+        -- Saves from before ZONE_ORDER counted unlocked zones by index (the
+        -- first six in a row); open the same zone in the new order.
+        if p.zones == nil then
+            p.unlocked = ZONES[U.clamp(p.unlocked, 1, 6)].rank
+            p.zones = 2
+        end
+        p.unlocked = U.clamp(p.unlocked, 1, #ZONES)
+        -- Saves from before the inventory carry their six best items.
         if next(p.inv) == nil and next(p.gear) ~= nil then
             local owned = {}
             for _, item in ipairs(GEAR) do
@@ -4034,7 +4242,7 @@ do
             Profile.inc(p.heroWins, R.def.id)
             Profile.inc(p.factionWins, factionIndex)
             Profile.inc(p.diffWins, R.diffIndex)
-            p.unlocked = math.max(p.unlocked, math.min(#ZONES, R.zoneIndex + 1))
+            p.unlocked = math.max(p.unlocked, math.min(#ZONES, R.zone.rank + 1))
             local zoneKey = tostring(R.zoneIndex)
             local best = p.zoneBest[zoneKey]
             if best == nil or R.time < best then
@@ -5056,8 +5264,9 @@ do
                 lines[#lines + 1] = U.col(GOLD, 'Achievement: ') .. a.name .. U.col(GREY, '  +' .. a.points)
             end
         end
-        if run.victory and run.zoneIndex < #ZONES and Profile.data.unlocked > run.zoneIndex then
-            lines[#lines + 1] = U.col(GREEN, ZONES[run.zoneIndex + 1].name .. ' is open.')
+        local rank = ZONES[run.zoneIndex].rank
+        if run.victory and rank < #ZONES and Profile.data.unlocked > rank then
+            lines[#lines + 1] = U.col(GREEN, ZONES[ZONE_ORDER[rank + 1]].name .. ' is open.')
         end
         BlzFrameSetText(Finale.achievements, table.concat(lines, '\n'))
         local rows = {}
@@ -5873,9 +6082,13 @@ do
         x, w = LAY.right, LAY.side
         ix, iw = x + P, w - 2 * P
         UI.card(page, x, T, w, LAY.h, 'ZONE')
+        -- The zone list: two columns in play order (ZONE_ORDER), top to bottom.
         local rowStep = 0.028
+        local rows = math.ceil(#ZONES / 2)
+        local colGap = 0.004
+        local colW = (iw - colGap) / 2
         local ctop = T - 0.044
-        local ch = LAY.h - 0.044 - P - #ZONES * rowStep - 0.006
+        local ch = LAY.h - 0.044 - P - rows * rowStep - 0.006
         well(page, ix, ctop, iw, ch)
         -- Zone picture in its own proportions, left of the name: the arena
         -- shot (2:1) when there is one, else the campaign art's square corner.
@@ -5890,21 +6103,22 @@ do
         C.zoneBosses = UI.text(page, '', ix + 0.009, ctop - 0.108, iw - 0.018, ch - 0.128, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
         C.zoneRecord = UI.text(page, '', ix + 0.009, ctop - ch + 0.017, iw - 0.018, 0.012, 0.0068)
         C.zoneRows = {}
-        for i, zone in ipairs(ZONES) do
-            local top = ctop - ch - 0.006 - (i - 1) * rowStep
-            local row = {}
-            row.edge = well(page, ix, top, iw, rowStep - 0.004)
-            row.glow = UI.box(page, ix + 0.003, top - 0.003, iw - 0.006, rowStep - 0.01, 255, 255, 255, 0, TEX.highlight)
-            row.name = UI.text(page, '', ix + 0.009, top, iw * 0.6, rowStep - 0.004, 0.0098)
-            row.status = UI.text(page, '', ix + iw * 0.5, top, iw * 0.5 - 0.009, rowStep - 0.004, 0.0068, TEXT_JUSTIFY_RIGHT)
-            row.hit = UI.hit(page, ix, top, iw, rowStep - 0.004, function()
-                if i <= Profile.data.unlocked then
-                    S.zone = i
+        for rank, zi in ipairs(ZONE_ORDER) do
+            local rx = ix + ((rank - 1) // rows) * (colW + colGap)
+            local top = ctop - ch - 0.006 - math.fmod(rank - 1, rows) * rowStep
+            local row = {zone = zi}
+            row.edge = well(page, rx, top, colW, rowStep - 0.004)
+            row.glow = UI.box(page, rx + 0.003, top - 0.003, colW - 0.006, rowStep - 0.01, 255, 255, 255, 0, TEX.highlight)
+            row.name = UI.text(page, '', rx + 0.007, top, colW - 0.014, rowStep - 0.004, 0.0084)
+            row.status = UI.text(page, '', rx + colW * 0.6, top, colW * 0.4 - 0.007, rowStep - 0.004, 0.0062, TEXT_JUSTIFY_RIGHT)
+            row.hit = UI.hit(page, rx, top, colW, rowStep - 0.004, function()
+                if rank <= Profile.data.unlocked then
+                    S.zone = zi
                     Lobby.clampDifficulty()
                     Lobby.refresh()
                 end
             end)
-            C.zoneRows[i] = row
+            C.zoneRows[rank] = row
         end
 
         -- Bottom row: difficulty, enter, random hero.
@@ -6211,26 +6425,28 @@ do
         local keyBest = Profile.keyBest(S.zone)
         marks[#marks + 1] = keyBest > 0 and U.col('ff8000', 'best +' .. keyBest) or U.col('6e665c', 'no key timed')
         BlzFrameSetText(C.zoneRecord, table.concat(marks, U.col(GREY, '  -  ')))
-        for i, row in ipairs(C.zoneRows) do
-            local z = ZONES[i]
-            local unlocked = i <= p.unlocked
-            local selected = i == S.zone
+        for rank, row in ipairs(C.zoneRows) do
+            local z = ZONES[row.zone]
+            local unlocked = rank <= p.unlocked
+            local selected = row.zone == S.zone
             BlzFrameSetAlpha(row.glow, selected and 150 or 0)
+            -- Half-width rows: the status is one short word (best cleared
+            -- difficulty or timed key); the card above has the full record.
             if unlocked then
                 BlzFrameSetText(row.name, selected and U.col(GOLD, z.name) or z.name)
-                local zoneCleared = Profile.zoneDiff(i)
-                local zoneKey = Profile.keyBest(i)
+                local zoneCleared = Profile.zoneDiff(row.zone)
+                local zoneKey = Profile.keyBest(row.zone)
                 if zoneKey > 0 then
-                    BlzFrameSetText(row.status, U.col('ff8000', 'Mythic +' .. zoneKey))
+                    BlzFrameSetText(row.status, U.col('ff8000', '+' .. zoneKey))
                 elseif zoneCleared > 0 then
                     local d = DIFFICULTIES[math.min(3, zoneCleared)]
-                    BlzFrameSetText(row.status, U.col(d.hex, d.name .. ' cleared'))
+                    BlzFrameSetText(row.status, U.col(d.hex, d.name))
                 else
-                    BlzFrameSetText(row.status, U.col(TIER_HEX[z.tier], TIER_NAME[z.tier]))
+                    BlzFrameSetText(row.status, '')
                 end
             else
                 BlzFrameSetText(row.name, U.col('6e665c', z.name))
-                BlzFrameSetText(row.status, U.col('6e665c', 'Locked'))
+                BlzFrameSetText(row.status, '')
             end
             UI.edgeTint(row.edge, selected and 214 or 110, selected and 170 or 84, selected and 90 or 46, 255)
         end
@@ -6289,17 +6505,23 @@ do
         UI.text(page, U.col(GREY, 'Every boss drops an item. Carry any six into your runs: pick an item, then Equip.'),
             ix, T - 0.042, iw, 0.013, 0.0072, TEXT_JUSTIFY_CENTER)
         K.icons = {}
-        local labelW = 0.15
-        local step = (iw - labelW) / 5
-        local size = 0.031
-        for zi, zone in ipairs(ZONES) do
-            local top = T - 0.066 - (zi - 1) * 0.048
-            UI.text(page, U.col(GOLD, zone.name), ix, top, labelW, 0.016, 0.0102)
-            UI.text(page, U.col(GREY, 'Item level ' .. (100 + 10 * (zone.tier - 1)) .. '+'), ix, top - 0.017, labelW, 0.012, 0.0068)
+        -- Two columns of zones in play order, each a name and its five items.
+        local rows = math.ceil(#ZONES / 2)
+        local colGap = 0.016
+        local colW = (iw - colGap) / 2
+        local labelW = colW * 0.34
+        local step = (colW - labelW) / 5
+        local size = math.min(0.031, step - 0.006)
+        for rank, zi in ipairs(ZONE_ORDER) do
+            local zone = ZONES[zi]
+            local cx = ix + ((rank - 1) // rows) * (colW + colGap)
+            local top = T - 0.066 - math.fmod(rank - 1, rows) * 0.048
+            UI.text(page, U.col(GOLD, zone.name), cx, top, labelW, 0.016, 0.0088)
+            UI.text(page, U.col(GREY, 'Item level ' .. (100 + 10 * (zone.tier - 1)) .. '+'), cx, top - 0.017, labelW, 0.012, 0.0066)
             local bosses = {zone.bosses[1], zone.bosses[2], zone.bosses[3], zone.bosses[4], zone.final}
             for bi, boss in ipairs(bosses) do
                 local item = boss.item
-                local bx = ix + labelW + (bi - 1) * step + (step - size) / 2
+                local bx = cx + labelW + (bi - 1) * step + (step - size) / 2
                 -- Hover previews an item; click selects it for Equip and Upgrade.
                 local o = UI.icon(page, gearIcon(item), bx, top, size, function()
                     Lobby.selectItem(item)
@@ -7000,7 +7222,9 @@ do
         end
         Keys.rebuild()
         Options.apply()
-        S.zone = math.min(S.zone, Profile.data.unlocked)
+        if ZONES[S.zone].rank > Profile.data.unlocked then
+            S.zone = ZONE_ORDER[Profile.data.unlocked]
+        end
 
         -- Hide the default console and let the world fill the whole screen.
         BlzHideOriginFrames(true)

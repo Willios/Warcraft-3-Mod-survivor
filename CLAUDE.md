@@ -18,8 +18,10 @@ Survivors-style Warcraft III Reforged map. The whole game is one Lua file,
 ## Testing
 
 `python tools/smoketest/run.py` runs the script against mocked natives (needs `pip install lupa`).
-The Armory step (`no button under: Upgrade`) fails now and then because gear drops are random;
-run it again before deciding that a change broke it.
+The Armory step (`no button under: Upgrade`, or `upgrade costs gold` with "spent 0 gold") fails now and
+then because gear drops are random: the armory keeps the item it selected on its first visit (before
+any loot, so the first item), and Upgrade only works if the test run dropped that item. Run it again
+before deciding that a change broke it.
 
 ## Standalone engine (engine/)
 
@@ -64,6 +66,39 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   zone thumbnail), `test_weapon.lua` (prints the weapon fields of a few heroes), `test_trees.lua`
   (probes trees with an item: every tree must move it). Their source is `tools/engine_tests/`
   (versioned); copy them to `dist` like the `src/` scripts.
+
+## Web version (since 2026-10-30)
+
+- Emscripten SDK 4.0.21 in `C:\emsdk`. Build from `engine/` in Git Bash: `bash port/web/build-survivor.sh`
+  (= `port/web/build-engine.py --survivor ../src`, about 5 minutes) writes `engine/build/web/survivor/`
+  (`index.html/js/wasm` + page scripts; `src/*.lua` and `src/art/*.tga` are embedded at `/share/warcraft-3/Scripts/Survivor`).
+  After editing `src/*.lua`, rebuild (the scripts are inside `index.wasm`); page JS can just be copied.
+- Game data (self-hosted, the user's choice): `python port/web/make_survivor_data.py "<Legacy dir>" build/web/survivor`
+  hard-links War3/War3Local/War3x/War3xLocal.mpq and the arena maps from `engine_boot.lua` into `data/` and writes
+  `data/files.json` (`id` = digest). `survivor.js` downloads it into the browser's OPFS on the first visit
+  (1.16 GB, via `install-worker.js` `download`) and again only when the id changes; without `files.json`
+  the page falls back to the upstream import panel. `data/` is Blizzard data: never in GitHub.
+- Upload: `python port/web/stage_survivor_upload.py build/web/survivor build/web/survivor-upload` writes
+  only the served files + `.htaccess` (`port/web/site/survivor.htaccess`: isolation headers, wasm type,
+  HTTPS redirect) + `data/`. The user uploads its contents with WinSCP to OVH shared hosting, multisite
+  folder `warcraftsurvivor` = `https://warcraftsurvivor.para-bellum.eu`.
+- Hosting: HTTPS (or localhost), every file served with `Cross-Origin-Opener-Policy: same-origin` and
+  `Cross-Origin-Embedder-Policy: require-corp`, `.wasm` as `application/wasm`, `data/` on the same origin.
+  Local test: `python port/web/serve.py --directory build/web/survivor --port 8765`.
+- Saves: the survivor build sets `BZ_WEB_HOME` (`/opfs/openrealm/user`), so the profile survives reloads
+  (upstream keeps the user directory in memory).
+- Headless test (own Chrome profile, never the desktop): the scratch `cdp_run.py` pattern, Chrome
+  `--headless=new --use-angle=swiftshader --enable-unsafe-swiftshader` + CDP screenshots and key events.
+  The engine's printf goes to its worker's console: CDP `Target.setAutoAttach` (flatten) + `Runtime.enable`
+  per worker session. `build-engine.py --define DEBUG_MAP_LOAD --out build/web/survivor-timing` logs
+  `MAP_LOAD` phase timings.
+- **Fixed 2026-10-30, web load time:** every OPFS read through WasmFS costs ~2 ms whatever its size, and
+  `mpq.c` read files one 4 KB sector at a time (about 10,000 reads per map): the menu map took 61 s,
+  each zone ~30 s. Browser builds now read archives in 256 KB chunks with a 16 MB cache per archive
+  (`MpqReadChunk` in `common/mpq.c`, `__EMSCRIPTEN__` only): menu 3.2 s, zone 2.9 s (server side).
+- Saves are local to the browser (OPFS), not online: another browser or device starts fresh.
+- Emscripten's port downloads (SDL2, zlib) fail with Python's SSL store on this machine;
+  `build-survivor.sh` sets `SSL_CERT_FILE` from `certifi`.
 
 ## GitHub (open source, since 2026-10-30)
 
@@ -191,7 +226,9 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 - Volume: a Master row drives `s_volume` (all effects, including sound kits and interface sounds that
   bypass the groups) and multiplies the music; every slider is squared (audio taper), so 10 is -40 dB.
 - Zone thumbnails: `src/art/zone_*.tga` (512x256 crops of an arena shot, see `test_zone_shot.lua`),
-  copied to `dist\windows\share\warcraft-3\Scripts\Survivor\`. Engine only; Reforged shows the campaign art.
+  copied to `dist\windows\share\warcraft-3\Scripts\Survivor\`. All 12 zones have one (2026-10-30): shoot
+  with `+set shot_fog "r g b start end"` and `+set shot_time` from the zone's `fog`/`time`, take the
+  middle 1280x640 of the 1280x720 shot and resize it to 512x256 (24-bit uncompressed TGA, as PIL saves). Engine only; Reforged shows the campaign art.
 - `games/warcraft-3/jass/jdo.c`: small public bridge API (native function records, pinned refs,
   signature access) and coroutines that can run native callbacks.
 
@@ -227,8 +264,31 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
   static pathing map (terrain plus baked buildings and destructables,
   `CM_ClosestStaticPathablePointForRadius` in `server/sv_routing.c`). `IsTerrainPathable` still reads
   only the terrain map. `test_trees.lua`: 8 of 8 Moonglade trees move the probe.
-- Zones: the script has 6 (Ashenvale, Westfall, The Barrens, Plaguelands, Felwood, Northrend); the
-  engine has one arena map (Moonglade), so zones 2-6 play there with their own enemies, fog and music.
+- Zones (2026-10-30): 12, each on its own official melee map with a matching tileset
+  (`SURVIVOR_ENGINE.arenas` in `src/engine_boot.lua`, keyed by `ZONES` index). Play order is
+  `ZONE_ORDER` (Ashenvale, Westfall, Tirisfal Glades, The Barrens, Stranglethorn Vale, Plaguelands,
+  Alterac Valley, Felwood, Dalaran, Hellfire Peninsula, The Black Temple, Northrend); zones 7-12 were
+  added later and keep their index in saves and gear ids (`z7b1`...), so old inventories stay valid.
+  `Profile.data.unlocked` counts open places in `ZONE_ORDER`; saves without `zones=2` counted the
+  first six by index and are migrated once in `Profile.load`. Arenas: Moonglade, `(2)TerenasStand`,
+  `(6)CopperCanyon`, `Maps\(8)Plaguelands.w3m`, `Maps\(8)BloodvenomFalls.w3m`, `Maps\(12)IceCrown.w3m`,
+  `Maps\(4)HarvestMoon.w3m`, `(6)StranglethornVale`, `Maps\(4)Frostsabre.w3m`, `(6)WizardsRetreat`,
+  `(4)DevilsCauldron`, `(6)Demon'sCrossing`. RoC `.w3m` maps load fine.
+  Any unit of any race can be an enemy (the script orders a native `attack` on the hero, so ranged
+  units shoot). Units added to a tuned roster carry `extra = true`: they share the health-ladder step
+  (`1.12^(index-1)`) of the unit before them instead of pushing every later unit up a step.
+  The hero spawns at the playable area's center, so a candidate needs open
+  ground there: `test_arena_probe.lua` (run alone) logs `ARENA` lines (walkable share of rings around
+  the center) and frames it for `+screenshot`, then quits. Rejected: `(6)RuinsOfStratholme` (0 walkable,
+  Dalaran Ruins tileset), `(8)GoldRush`, `(8)PlainsOfSnow`, `(3)Nighthaven`, `(4)Hellfire`,
+  `(8)Deadlands`, `(6)DragonFire` (center blocked).
+  `test_zone_change.lua` (add-on, `+set zone_change "5 4 1 2"` on the menu map) enters a zone the way
+  the lobby does (`survivor_run` + `ChangeLevel`) and logs `ZONERUN` lines (enemies, hero), quits at 40 s.
+  A run that ends (the idle hero dies) saves the real profile: back it up and restore it.
+- **Fixed 2026-10-30, gameplay:** `UnitApplyTimedLife` was an empty stub, so every script summon
+  (Feral Spirit, Water Elemental, all `kind = 'summon'` spells) lived forever and piled up to
+  `CFG.MAX_SUMMONS`. It now applies the engine's BTLF status (`S_SpellApplyTimedLife`), which kills
+  on expiry; the buff id argument is ignored (only BTLF expiry kills in `m_unit.c`).
 - `GetTriggerEventId` is a stub in the engine (always null): do not branch on it; register one
   trigger per event instead.
 - `Abilities\Spells\Orc\WindWalk\WindWalkCaster.mdl` does not exist in 1.29 (Wind Walk fades the hero).
@@ -294,6 +354,16 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-10-30:** The first web build was handed over with its 1-2 minute map loads blamed on headless
+  software rendering ("With software GL the menu takes ~2 min" in this file); the user found the loads
+  slow. Timing logs showed CPU/file phases, not rendering: per-sector OPFS reads. Lesson: when a
+  new platform is slow, read the phase timings before naming a cause (repeat of the 2026-10-29 lesson).
+
+- **2026-10-30:** Engine test batches backed up the real profile at their start and restored it at
+  their end (about 6 minutes later) while the user was playing the game in between; a run the user
+  finished inside that window would have been reverted. Lesson: before a batch that saves the
+  profile, tell the user not to play until it ends, or keep the batch to one short run.
 
 **Rule: if you break anything, note it here.** Whenever a change of yours breaks something that
 worked (a feature, a test, the build, the editor save, the user's profile), add an entry right away,

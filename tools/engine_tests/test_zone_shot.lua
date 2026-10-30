@@ -17,8 +17,16 @@ function main()
     FogEnable(false)
     FogMaskEnable(false)
     SuspendTimeOfDay(true)
-    if EngineCvar('shot_fog') == '1' then
-        SetTerrainFogEx(0, 900, 4200, 0.5, 0.10, 0.16, 0.22)
+    -- shot_fog: '1' (Ashenvale's fog) or a zone's fog as 'r g b start end'.
+    local fog = {}
+    for v in EngineCvar('shot_fog'):gmatch('[^ ]+') do
+        fog[#fog + 1] = tonumber(v)
+    end
+    if #fog == 1 and fog[1] == 1 then
+        fog = {0.10, 0.16, 0.22, 900, 4200}
+    end
+    if #fog == 5 then
+        SetTerrainFogEx(0, fog[4], fog[5], 0.5, fog[1], fog[2], fog[3])
     end
     SetFloatGameState(GAME_STATE_TIME_OF_DAY, tonumber(EngineCvar('shot_time') ~= '' and EngineCvar('shot_time') or '0'))
     EnableUserControl(false)
