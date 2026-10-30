@@ -15,7 +15,7 @@ function Survivor_Start()
     local types = {'unec', 'uban', 'umtw', 'uobs', 'uabo', 'ucry', 'ugar', 'nfgu', 'ufro'}
     if only ~= '' then
         types = {}
-        for id in only:gmatch('[a-z]+') do
+        for id in only:gmatch('[A-Za-z0-9]+') do
             types[#types + 1] = id
         end
     end

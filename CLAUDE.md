@@ -83,16 +83,26 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   After editing `src/*.lua`, rebuild (the scripts are inside `index.wasm`); page JS can just be copied.
 - Game data (self-hosted, the user's choice): `python port/web/make_survivor_data.py "<Legacy dir>" build/web/survivor`
   writes trimmed copies of War3/War3Local/War3x/War3xLocal.mpq, hard-links the arena maps from `engine_boot.lua`
-  into `data/` and writes `data/files.json` (`id` = digest). `survivor.js` downloads it into the browser's OPFS on
-  the first visit (667 MB since 2026-10-30, was 1.16 GB; via `install-worker.js` `download`) and again only when
-  the id changes; without `files.json` the page falls back to the upstream import panel. `data/` is Blizzard data:
-  never in GitHub. **Trim** (`trim_archives`): the hash and block tables are copied as they are, with dropped
-  entries marked deleted, and kept payloads byte for byte (FIX_KEY files re-encrypted for their new offset).
-  Dropped: lower-priority copies of media files (the engine opens the highest archive's copy; text files are
-  merged across archives by `FS_ReadFileAll` and all stay), `Sound\Dialogue` except `GenericWarnings`
-  (UISounds.slk), campaign maps, `War3(x)_low/_med.mpq`. The single-letter tileset archives (`A.mpq`...) stay:
-  `R_W3OpenTilesetArchive` mounts them. Unnamed files stay. `--full` links the archives whole. Check after a rule
-  change: compare an engine run on `-data build/web/survivor/data` with one on the install (missing-file lines).
+  into `data/` and writes `data/files.json` (`id` + a `sha1` per file). `survivor.js` downloads it into the
+  browser's OPFS on the first visit (199 MB since 2026-10-30; was 667 MB, then 1.16 GB; via `install-worker.js`
+  `download`); when the id changes, files whose name, size and sha1 match the installed copy are copied from it
+  locally and only the others are downloaded (tested in headless Chrome). Without `files.json` the page falls
+  back to the upstream import panel. `data/` is Blizzard data: never in GitHub.
+  **Trim** (`trim_archives`): keeps only the files in `tools/web_trace_reads.txt` (archive + name; `*` = highest
+  archive that has it) plus `(listfile)`/`(attributes)`/`(signature)`. Hash and block tables are copied as they
+  are, dropped entries marked deleted, kept payloads byte for byte (FIX_KEY files re-encrypted for their new offset).
+  The tileset archives (`A.mpq`...) are read whole, so they stay whole. `--full` links the archives whole.
+  **The reads list comes from `tools/web_trace.py`** (see its docstring): the engine logs every archive read and
+  miss when `OPENREALM_FSTRACE=<file>` is set (`FS_TraceRead` in `common/common.c`); the tool runs every zone
+  (roster, bosses, all 24 heroes, every spell), zone entry from the menu (loading screen), lobby tab, options
+  page, every icon the script can show (generated `test_icons.lua`) and a defeat, hidden and muted, ~9 min,
+  backing up and restoring the profile and config. Then `reads <full> <trimmed>` merges a trace on the install
+  with one on the trimmed data (`run --data engine/build/web/survivor/data`; `compare` lists what the trim lost),
+  adds numbered sound variants, every zone playlist and every asset path written in the script. Music is 89 MB.
+  `run --only icons enter01 ...` reruns single sessions; `reads` takes any number of trace dirs. **Rerun it after adding
+  heroes, spells, enemies, zones or UI art**, or the browser build misses those files (invisible model, silence).
+  Later additions could ship as an extra archive sorted after `War3xLocal.mpq` (the engine mounts every `.mpq`
+  in the data folder by name, later wins), so players would not re-download the big four: not built yet.
   Rerun `stage_survivor_upload.py` afterwards: the upload folder shares `files.json` with the build through a hard link.
 - Upload: `python port/web/stage_survivor_upload.py build/web/survivor build/web/survivor-upload` writes
   only the served files + `.htaccess` (`port/web/site/survivor.htaccess`: isolation headers, wasm type,
@@ -411,6 +421,17 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-10-30:** The first trace-trimmed web data shipped without 11 hero icons (Keeper, Priestess, Warden, every
+  Tavern hero) and without the zones' loading-screen art: the trace opened the lobby on one faction and started
+  runs directly on the arena (`survivor_run`), so nothing drew the other factions' icons or a loading screen. The
+  user found the magenta icons. `web_trace.py` now draws every icon the script can show (`test_icons.lua`) and
+  enters each zone from the menu. Lesson: a usage trace covers only what it drives; list what the UI can show
+  (every faction, page, screen) and drive each one, then compare the trimmed data on the same sessions.
+
+- **2026-10-30:** The first file-trace batch (`OPENREALM_FSTRACE`) passed a relative trace path while the
+  engine runs from `dist\windows`; no trace was written and the batch was stopped after its first wave.
+  Lesson: paths handed to the engine (env vars, cvars) are absolute; check the first output exists.
 
 - **2026-10-30:** While trimming the web archives, two Python scripts with backslash paths went through
   `python -c`/heredocs and failed to parse (third time for this lesson), and the first trim kept every
