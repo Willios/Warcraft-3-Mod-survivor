@@ -71,9 +71,9 @@ Reforged's data does not work with the standalone engine.
    ```
 2. Clone this repository, and the engine fork into `engine/`:
    ```sh
-   git clone https://github.com/Willios/warcraft-survivors
-   cd warcraft-survivors
-   git clone -b survivor https://github.com/Willios/open-realm engine
+   git clone https://github.com/Willios/Warcraft-3-Mod-survivor
+   cd Warcraft-3-Mod-survivor
+   git clone -b survivor https://github.com/Willios/open-realm-williosfork engine
    ```
 3. Build the engine from `engine/`:
    ```powershell
@@ -103,7 +103,7 @@ The file must never contain a percent sign: the editor crashes on save.
 | `tools/engine_tests/` | Test scripts for the standalone engine |
 | `tools/release/` | Builds the Windows download |
 | `docs/screenshots/` | The pictures above |
-| `engine/` | Not in this repository: the [OpenRealm fork](https://github.com/Willios/open-realm/tree/survivor) is cloned here |
+| `engine/` | Not in this repository: the [OpenRealm fork](https://github.com/Willios/open-realm-williosfork/tree/survivor) is cloned here |
 
 ## How it works
 

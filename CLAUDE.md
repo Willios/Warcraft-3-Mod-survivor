@@ -68,8 +68,11 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
 ## GitHub (open source, since 2026-10-30)
 
 - The user commits and pushes with GitHub Desktop; Claude only prepares files and checks them.
-- This folder is one repository (MIT, Willios). `engine/` is **not** in it: it is its own repository,
-  the open-realm fork on branch `survivor`, published as the user's fork on GitHub.
+- This folder is one repository (MIT, Willios): `github.com/Willios/Warcraft-3-Mod-survivor` (private
+  until the user reviews it). `engine/` is **not** in it: it is its own repository, the open-realm
+  fork on branch `survivor`, published as `github.com/Willios/open-realm-williosfork`.
+- Bundling Blizzard data (as the Azeroth Survivors website download does with WoW MPQs) is the
+  user's own risk decision; it never goes into either GitHub repository (DMCA takedowns hit the repo).
 - **Never commit `release/`**: the portable build bundles the user's Warcraft III install
   (`War3.mpq`...). No `*.mpq`, no extracted Blizzard files, no zone thumbnails (screenshots of
   Blizzard maps). Tester builds go to GitHub Releases (the 4 MB SFX has no Blizzard data).
