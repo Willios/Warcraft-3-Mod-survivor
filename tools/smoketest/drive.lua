@@ -185,6 +185,13 @@ MOCK.click('Resume')
 check(not run.paused, 'run resumes after the keybinds')
 check(MOCK.music and MOCK.music:find('NightElf', 1, true), 'zone music plays')
 note('options ok')
+-- The stats panel shows under the hero frame; C hides and shows it.
+MOCK.advance(0.2)
+check(MOCK.findText('Critical chance') and MOCK.findText('175'), 'stats panel lists critical strike')
+MOCK.tap(OSKEY_C)
+check(not MOCK.findText('Critical chance') and Profile.data.opts.stats == 0, 'C hides the stats')
+MOCK.tap(OSKEY_C)
+check(MOCK.findText('Critical chance'), 'C shows the stats again')
 -- Hovering a spell slot shows what the spell does.
 local hud = upvalue(G.startRun, 'Hud')
 UI.safe(function() hud.spellTip(1) end)
@@ -200,6 +207,30 @@ if not (run.ended and run.victory) then return table.concat(report, ' | ') .. ' 
 check(run.ended and run.victory, 'normal run ends in victory')
 check(MOCK.findText('VICTORY'), 'victory screen')
 MOCK.pokeAll()
+-- Endless mode: the won run goes on, stronger every minute, bosses on a timer;
+-- its end adds only what came after the victory.
+local runsBefore, killsBanked, goldBefore = Profile.data.runs, run.kills, Profile.data.gold
+local bossesBefore = run.bosses
+MOCK.click('Endless Mode')
+check(R() == run and not run.ended and run.endless, 'endless mode resumes the run')
+play(200, {slayBosses = true, immortal = true})
+check(not run.ended, 'endless run still going')
+check(run.bosses > bossesBefore, 'endless bosses come back, slain ' .. (run.bosses - bossesBefore))
+local hpScale = G.endlessScale()
+check(hpScale > 1.4, 'endless health grows, x' .. hpScale)
+local endlessGold = run.gold - run.banked.gold
+run.hero.invulnerable = false
+run.invulnUntil = 0
+UnitDamageTarget(next(run.enemies), run.hero, 1e8, true, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+MOCK.advance(0.1)
+check(run.ended and run.victory, 'endless ends, still a victory')
+check(MOCK.findText('ENDLESS'), 'endless end screen')
+check(not MOCK.findText('Endless Mode'), 'no endless button after endless')
+check(Profile.data.runs == runsBefore, 'endless is the same run')
+check(Profile.data.endless['1'] and Profile.data.endless['1'] >= 790, 'endless time saved, got ' .. tostring(Profile.data.endless['1']))
+check(math.abs(Profile.data.gold - goldBefore - math.floor(endlessGold * run.diff.reward + 0.5)) <= 1, 'endless gold banked once')
+note(string.format('endless: %.0f s, health x%.2f, +%d kills, +%d bosses', run.time - run.endlessAt, hpScale,
+    run.kills - killsBanked, run.bosses - bossesBefore))
 MOCK.click('Return to Camp')
 check(R() == nil and S.screen == 'lobby', 'back in lobby')
 note('profile after win: zoneDiff1=' .. tostring(Profile.data.zoneDiff['1']) .. ' unlocked=' .. Profile.data.unlocked
@@ -339,6 +370,33 @@ for index, hero in ipairs(HEROES) do
         check(math.abs(life - GetWidgetLife(image) - 30) < 0.01, 'mirror images take triple damage, lost '
             .. (life - GetWidgetLife(image)))
         note('mirror image takes 10 x 3')
+    end
+    if run.spellByKey.storm_earth_fire then
+        -- The Brewmaster splits into three spirits, hidden and invulnerable,
+        -- and merges back when the split ends.
+        local CAST = upvalue(G.updateSpells, 'CAST')
+        local inst = run.spellByKey.storm_earth_fire
+        MOCK.advance(0.1)
+        if run.hand then MOCK.tap(OSKEY_1) end
+        check(run.split or CAST.summon(inst, inst.v), 'storm, earth and fire casts')
+        inst.cd = inst.v.cd
+        -- The mock lists npn1 as an unknown rawcode: Storm and Earth come out.
+        check(run.split and #run.split.units == 2, 'the spirits that exist come out, got '
+            .. tostring(run.split and #run.split.units))
+        check(run.hero.alpha == 0, 'the split hero is hidden')
+        local spirits = run.split.units
+        for _ = 1, math.ceil(inst.v.dur / 0.25) + 4 do
+            MOCK.advance(0.25)
+            if run.hand then MOCK.tap(OSKEY_1) end
+        end
+        check(run.split == nil, 'the split ends, time ' .. run.time .. ' until ' .. tostring(run.split and run.split.untilT)
+            .. ' paused=' .. tostring(run.paused) .. ' hand=' .. tostring(run.hand ~= nil) .. ' ended=' .. tostring(run.ended)
+            .. ' same=' .. tostring(run.split == spirits))
+        check(run.hero.alpha == 255, 'the hero comes back')
+        for _, u in ipairs(spirits) do
+            check(u.removed and run.summons[u] == nil, 'the spirits merge back')
+        end
+        note(string.format('brewmaster split %.1f s and merged', inst.v.dur))
     end
     play(45, {slayBosses = true})
     run = R()

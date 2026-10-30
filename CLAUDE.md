@@ -40,7 +40,15 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   `games/warcraft-3/game/`, abilities in `skills/s_*.c`).
 - Play: `engine\dist\windows\play_survivor.bat` (borderless window over the desktop,
   `vid_fullscreen 2`, so Alt+Tab does not minimize or switch modes; the menu loads behind a black
-  screen, entering a zone shows that zone's loading screen).
+  screen, entering a zone shows that zone's loading screen). It writes the engine's output to
+  `dist\windows\last_run.log` (one session; read it after a crash the user reports).
+- Open (2026-10-30): the user reports Plaguelands crashing after a few minutes (local and web). Not
+  reproduced: an 11:40 run (healed idle Blademaster, all bosses and Sapphiron, 139 enemies) and 200 s with
+  ~150 Plaguelands casters both ran clean. Then the user's cases: Lich froze at 2:50 and Dreadlord (Inferno,
+  Carrion Swarm, Vampiric Aura) at 0:32, both in the browser (full page freeze, Opera GX). Reproduced in neither
+  native runs (walking Lich 5:30, Dreadlord with Inferno; memory flat ~630-670 MB) nor headless Chrome with the
+  add-on embedded (`--out build/web/survivor-test`, Lich 7:40, Dreadlord 3:35 with audio unlocked; wasm 442-531 MB).
+  Suspect: Opera GX's GX Control RAM/CPU limiter. Every zone track exists (some only in `War3Local.mpq`).
 - Tester build: `powershell -ExecutionPolicy Bypass -File tools\release\make_release.ps1` writes
   `release\WarcraftSurvivors.exe` (7-Zip SFX, ~4 MB: engine + `src/` scripts + `Play Warcraft Survivors.bat`,
   which finds or asks for the tester's own 1.29 install and keeps it in `wc3path.txt`). No Blizzard data inside.
@@ -59,8 +67,8 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
 - `python tools/engine_flow.py <name> w300 s k27 d100 w60 u100 ...` writes a chained `<name>.cfg`
   (w = wait frames, s = screenshot, k = tap key, d/u = key down/up, engine key codes); run it with
   `+exec <name>.cfg`. **Always add `+set vid_hidden 1`** to test runs (the window otherwise takes
-  focus and receives whatever the user is typing), and `+set com_maxfps_background 0` so waits keep
-  their pace. A hidden window renders at 1280x720.
+  focus and receives whatever the user is typing), **`+set s_volume 0`** (a hidden window still plays
+  its sound on the user's speakers), and `+set com_maxfps_background 0` so waits keep their pace. A hidden window renders at 1280x720.
 - Test scripts in `Scripts\Survivor\` (each replaces the map's main; run alone as `wc3_lua_script`):
   `test_models.lua` (every hero preview model in one grid), `test_zone_shot.lua` (arena shot for a
   zone thumbnail), `test_weapon.lua` (prints the weapon fields of a few heroes), `test_trees.lua`
@@ -74,14 +82,25 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   (`index.html/js/wasm` + page scripts; `src/*.lua` and `src/art/*.tga` are embedded at `/share/warcraft-3/Scripts/Survivor`).
   After editing `src/*.lua`, rebuild (the scripts are inside `index.wasm`); page JS can just be copied.
 - Game data (self-hosted, the user's choice): `python port/web/make_survivor_data.py "<Legacy dir>" build/web/survivor`
-  hard-links War3/War3Local/War3x/War3xLocal.mpq and the arena maps from `engine_boot.lua` into `data/` and writes
-  `data/files.json` (`id` = digest). `survivor.js` downloads it into the browser's OPFS on the first visit
-  (1.16 GB, via `install-worker.js` `download`) and again only when the id changes; without `files.json`
-  the page falls back to the upstream import panel. `data/` is Blizzard data: never in GitHub.
+  writes trimmed copies of War3/War3Local/War3x/War3xLocal.mpq, hard-links the arena maps from `engine_boot.lua`
+  into `data/` and writes `data/files.json` (`id` = digest). `survivor.js` downloads it into the browser's OPFS on
+  the first visit (667 MB since 2026-10-30, was 1.16 GB; via `install-worker.js` `download`) and again only when
+  the id changes; without `files.json` the page falls back to the upstream import panel. `data/` is Blizzard data:
+  never in GitHub. **Trim** (`trim_archives`): the hash and block tables are copied as they are, with dropped
+  entries marked deleted, and kept payloads byte for byte (FIX_KEY files re-encrypted for their new offset).
+  Dropped: lower-priority copies of media files (the engine opens the highest archive's copy; text files are
+  merged across archives by `FS_ReadFileAll` and all stay), `Sound\Dialogue` except `GenericWarnings`
+  (UISounds.slk), campaign maps, `War3(x)_low/_med.mpq`. The single-letter tileset archives (`A.mpq`...) stay:
+  `R_W3OpenTilesetArchive` mounts them. Unnamed files stay. `--full` links the archives whole. Check after a rule
+  change: compare an engine run on `-data build/web/survivor/data` with one on the install (missing-file lines).
+  Rerun `stage_survivor_upload.py` afterwards: the upload folder shares `files.json` with the build through a hard link.
 - Upload: `python port/web/stage_survivor_upload.py build/web/survivor build/web/survivor-upload` writes
   only the served files + `.htaccess` (`port/web/site/survivor.htaccess`: isolation headers, wasm type,
   HTTPS redirect) + `data/`. The user uploads its contents with WinSCP to OVH shared hosting, multisite
   folder `warcraftsurvivor` = `https://warcraftsurvivor.para-bellum.eu`.
+- After an upload, the page, `.js` and `index.wasm` must reach the player together: OVH served them with
+  `max-age=900`, and a cached old `index.js` with a new `index.wasm` is a black screen. `survivor.htaccess`
+  now sets `no-cache` on html/js/wasm (revalidation, 304 when unchanged); re-upload `.htaccess` with it.
 - Hosting: HTTPS (or localhost), every file served with `Cross-Origin-Opener-Policy: same-origin` and
   `Cross-Origin-Embedder-Policy: require-corp`, `.wasm` as `application/wasm`, `data/` on the same origin.
   Local test: `python port/web/serve.py --directory build/web/survivor --port 8765`.
@@ -234,6 +253,29 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
   talent rows (`UI.tooltip`, shared with the HUD's spell/blessing tips), in-run Inventory panel (top right, 2x3,
   hover shows the item: `Hud.refreshGear`/`Hud.gearTip`), and the Wisp Companion perk (Rewards, 3 ranks): a wisp
   effect (`G.updateCompanion`) fetches gems and coins outside the pickup range. The smoke test checks the wisp.
+- 2026-10-30: Endless mode (after Azeroth Survivors): the victory screen's **Endless Mode** button resumes the
+  won run (`G.continueEndless`); the victory is banked first, and the endless end (death, or Restart/Main
+  Menu = `G.endRun(false, true)`) adds only the gold/kills/bosses since (`R.banked`) and keeps the longest
+  endless time per zone (`Profile.data.endless`, achievements at 15/20/30 min). Enemy health x1.15 and damage
+  x1.08 per endless minute (`G.endlessScale`, `CFG.ENDLESS_*`), the horde at `MAX_ENEMIES`, a boss every 90 s
+  (the zone's bosses then its final boss, in turn), elites every 25 s, rings continue.
+- 2026-10-30: Stats panel under the hero frame (`STAT_ROWS`, `Hud.refreshStats`): one row per stat with the
+  icon of the blessing that raises it, green when above the base; the `stats` action (C) hides it
+  (`Profile.data.opts.stats = 0`).
+- 2026-10-30: Storm, Earth and Fire is a real split (`def.split`, `G.startSplit/updateSplit/endSplit`): the hero
+  is hidden (alpha 0), invulnerable and casts/attacks nothing for 12 s (x spell duration, not rank), enemies
+  attack the spirits (`G.decoyNear`), the spirits are removed and the hero reappears; the cooldown starts at the
+  merge. Before, the spirits lasted one cooldown and, at high rank, the split recast itself forever.
+- 2026-10-30: Warden and Priestess of the Moon carry Shadowmeld (`Ashm`, `UnitAbilities.slk`); the script moves
+  the hero, so the engine saw it standing still and hid it at night. The hero (and Mirror Images) lose `Ashm`.
+- Test aid: `+set survivor_autopick 1` (engine) picks the first card of every hand after 0.3 s. Use it for any
+  unattended run longer than a minute: `pickcards.cfg` presses are frame-counted and run out within seconds
+  when `com_maxfps_background 0` lets a hidden window render hundreds of frames per second.
+- `tools/engine_tests/test_plague.lua` (add-on): keeps the hero alive, logs `PLAGUE` lines (enemy count by
+  type every 5 s) and, unless `plague_units "zzzz"`, spawns the Plaguelands casters next to the hero every 10 s.
+- Web: the engine checks `emscripten_is_webgl_context_lost` about once a second (`R_WebCheckContextLost` in
+  `renderer/r_main.c`) and calls the page's `openrealmContextLost` (survivor.js: reload prompt) instead of
+  leaving a black canvas. Nothing recreated GL objects after a context loss before.
 - Difficulty: Normal / Heroic / Mythic / Mythic+ (no cap, no affixes since 2026-10-29), opened per zone
   by winning the one before. The lobby button opens a window listing all four (`Lobby.buildDifficulty`);
   `+set survivor_menu difficulty` opens it for screenshots. Zone `power` climbs 0.7 (Ashenvale) to 3.3
@@ -370,6 +412,12 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
 
+- **2026-10-30:** While trimming the web archives, two Python scripts with backslash paths went through
+  `python -c`/heredocs and failed to parse (third time for this lesson), and the first trim kept every
+  shadowed War3.mpq file because the extension list was lower case while the names were upper case (caught by
+  the per-archive counts before handover). Lesson: scripts with `\` go to a file; compare a new filter's
+  result with the analysis it came from before trusting it.
+
 - **2026-10-30:** The first web build was handed over with its 1-2 minute map loads blamed on headless
   software rendering ("With software GL the menu takes ~2 min" in this file); the user found the loads
   slow. Timing logs showed CPU/file phases, not rendering: per-sector OPFS reads. Lesson: when a
@@ -379,6 +427,30 @@ Every mistake Claude makes in this project is recorded here, with the lesson.
   their end (about 6 minutes later) while the user was playing the game in between; a run the user
   finished inside that window would have been reverted. Lesson: before a batch that saves the
   profile, tell the user not to play until it ends, or keep the batch to one short run.
+
+- **2026-10-30:** An 8-minute Plaguelands crash-hunt run relied on `+exec pickcards.cfg` with
+  `com_maxfps_background 0`; the frame-counted presses ran out in seconds, a card hand paused the run at 1:30
+  and the remaining 6.5 minutes tested nothing (the log's enemy count never changed). Lesson: check the first
+  log lines of a long run for progress before waiting on it; unattended runs use `+set survivor_autopick 1`.
+
+- **2026-10-30:** An 11-minute hidden test run played its music and sound on the user's speakers
+  (`vid_hidden` hides the window, not the audio). Lesson: test runs get `+set s_volume 0`.
+
+- **2026-10-30:** A "quick" screenshot run (`survivor_run`, no add-on) let the idle hero die at 0:11; the
+  defeat saved one extra run into the user's real profile, with no backup taken (the user had played since the
+  last one). Undone by hand (runs, kills, two codex entries). Lesson: **every** engine run with
+  `survivor_run` can end a run and save: back up the profile right before it, and keep the hero alive
+  (`test_plague.lua` heals it) when the run is not about dying.
+
+- **2026-10-30:** Upload instructions said "a normal reload is usually enough" without checking the server's
+  cache headers; OVH cached `index.js` for 15 minutes and the user got a black screen after uploading
+  4 files. Lesson: check `curl -sI` headers of the live site before telling the user how fresh files reach
+  players.
+
+- **2026-10-30:** `test_plague.lua` healed the hero once a second; with 60 enemies the Lich died between two
+  heals, the run ended and saved into the real profile (restored from the backup taken just before). The
+  add-on now heals every 0.1 s. Lesson: compare the profile after every run that uses `survivor_run`, and a
+  "keep alive" aid must outpace the worst burst, not the average damage.
 
 **Rule: if you break anything, note it here.** Whenever a change of yours breaks something that
 worked (a feature, a test, the build, the editor save, the user's profile), add an entry right away,

@@ -149,7 +149,7 @@ function GetUnitTypeId(u) return FourCC(u.id) end
 function PauseUnit(u, p) u.paused = p end
 function BlzPauseUnitEx(u, p) u.stuns = (u.stuns or 0) + (p and 1 or -1) end
 function SetUnitScale() end
-function SetUnitVertexColor(u, r, g, b, a) int('SetUnitVertexColor', r) end
+function SetUnitVertexColor(u, r, g, b, a) int('SetUnitVertexColor', r); u.alpha = a end
 function BlzSetUnitName(u, s) u.name = s end
 function GetUnitName(u) return u.name end
 function SetUnitAnimation(u, a) u.anim = a end

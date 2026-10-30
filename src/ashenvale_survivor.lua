@@ -23,6 +23,12 @@ do
     local CFG = {
         TICK = 0.03125,
         RUN_LENGTH = 600.0,          -- the final boss arrives at 10:00
+        -- Endless mode (after the final boss): enemy health and damage compound
+        -- every minute, a boss comes back on a timer, elites come more often.
+        ENDLESS_HP = 1.15,           -- enemy health x1.15 per endless minute
+        ENDLESS_DMG = 1.08,          -- enemy damage x1.08 per endless minute
+        ENDLESS_BOSS_EVERY = 90.0,
+        ENDLESS_ELITE_EVERY = 25.0,
         MAX_ENEMIES = 150,
         MAX_PICKUPS = 220,
         SPELL_SLOTS = 4,             -- spells and blessings have no rank limit
@@ -633,8 +639,9 @@ do
         apply = function(s, v) s.dodge = s.dodge + v.amount; s.crit = s.crit + v.amount end,
         desc = '+{pct}\037 dodge and +{pct}\037 critical strike chance.'})
     spell('storm_earth_fire', {name = 'Storm, Earth and Fire', code = 'ANef', icon = 'BTNStormEarth&Fire', kind = 'summon',
-        cd = 35.0, count = 3, countEvery = 9, units = {'npn1', 'npn2', 'npn3'}, cycleUnits = true, dmg = 40, hp = 900,
-        birth = FX.teleport, desc = 'Splits into three elemental spirits for {dur} sec. Each strikes for {dmg}.'})
+        cd = 35.0, count = 3, dur = 12, split = true, units = {'npn1', 'npn2', 'npn3'}, cycleUnits = true, dmg = 55, hp = 900,
+        birth = FX.teleport,
+        desc = 'Splits into Storm, Earth and Fire for {dur} sec, then the spirits merge back into the Brewmaster. Each strikes for {dmg}.'})
     spell('soul_burn', {name = 'Soul Burn', code = 'ANso', icon = 'BTNSoulBurn', kind = 'bolt', cd = 2.0, dmg = 26, count = 1,
         countEvery = 2, range = 850, missile = FX.fireball, speed = 1000, dot = 18, dotDur = 4, impact = FX.soulBurn,
         desc = 'Sets {count} enemy\'s soul ablaze: {dmg} damage plus {dot} per second for 4 sec.'})
@@ -1339,6 +1346,12 @@ do
         achievement('faction' .. fi, 'For the ' .. faction.key .. '!', 'Win a run with a ' .. faction.key .. ' hero.',
             'AOae', 'BTNCommand', 10, function(p) return p.factionWins[tostring(fi)] or 0, 1 end)
     end
+    achievement('overtime', 'Overtime', 'Reach 15:00 in endless mode.', 'AOww', 'BTNWhirlwind', 15,
+        function(p) return maxValue(p.endless), 900 end)
+    achievement('unending', 'Unending', 'Reach 20:00 in endless mode.', 'AHad', 'BTNDevotion', 25,
+        function(p) return maxValue(p.endless), 1200 end)
+    achievement('deathless_hour', 'Deathless', 'Reach 30:00 in endless mode.', 'AHds', 'BTNDivineIntervention', 40,
+        function(p) return maxValue(p.endless), 1800 end)
     achievement('ascendant', 'Ascendant', 'Reach level 30 in a single run.', 'AHab', 'BTNBrilliance', 15,
         function(p) return p.bestLevel, 30 end)
     achievement('veteran', 'Veteran', 'Play 25 runs.', 'AOsh', 'BTNShockWave', 10,
@@ -1493,6 +1506,8 @@ do
             -- zoneDiff: best difficulty cleared per zone (4 = a Mythic+ key).
             -- keyMax: highest keystone a zone may be started at; keyBest: best timed.
             zoneDiff = {}, keyMax = {}, keyBest = {},
+            -- endless: zone index -> longest endless run there, in seconds.
+            endless = {},
             -- gear: item id -> dropped item level; upg: item id -> upgrade steps.
             gear = {}, upg = {},
             -- opts: sound volumes in percent, keyed as in VOLUMES (missing = 100),
@@ -2249,10 +2264,14 @@ do
         end
         -- 5 percent faster per rank, compounding: never reaches zero.
         v.cd = (def.cd or 1) * 0.95 ^ r * (1 - math.min(0.6, s.cdr))
-        if def.kind == 'summon' then
+        if def.kind == 'summon' and not def.split then
             -- Out for exactly one cooldown, so they cannot pile up on their own;
-            -- spell duration (Persistence) lets the waves overlap.
+            -- spell duration (Persistence) lets the waves overlap. A split
+            -- (Storm, Earth and Fire) lasts its own duration.
             v.dur = v.cd * (1 + s.duration)
+        elseif def.split then
+            -- Ranks make the spirits stronger, not the split longer.
+            v.dur = def.dur * (1 + s.duration)
         else
             v.dur = (def.dur or 0) * (1 + 0.1 * r) * (1 + s.duration)
         end
@@ -2664,6 +2683,16 @@ do
         return math.max(0, R.time / CFG.RUN_LENGTH)
     end
 
+    -- Endless mode's health and damage multipliers: they compound with every
+    -- minute since the final boss fell (1, 1 outside endless mode).
+    function G.endlessScale()
+        if not R.endless then
+            return 1, 1
+        end
+        local minutes = (R.time - R.endlessAt) / 60
+        return CFG.ENDLESS_HP ^ minutes, CFG.ENDLESS_DMG ^ minutes
+    end
+
     -- Three neighbouring roster tiers that walk up the roster in thirty steps.
     function G.wavePool()
         local n = #R.zone.enemies
@@ -2682,6 +2711,9 @@ do
     -- at 1:30, 36 at 4:00, 88 at 8:00 and 120 when the final boss comes,
     -- fewer in the first zones (zone.density).
     function G.targetAlive()
+        if R.endless then
+            return CFG.MAX_ENEMIES
+        end
         local density = R.zone.density or 1
         return math.min(CFG.MAX_ENEMIES, math.floor(8 + 112 * density * G.progress() ^ 1.5))
     end
@@ -2711,6 +2743,8 @@ do
             hp = def.hp * 1.12 ^ ((def.index or 1) - 1) * (1 + progress * 0.75) * zone.power * diff.hp
             dmg = def.dmg * (1 + progress * 0.9) * zone.power ^ 0.7 * diff.dmg
         end
+        local endlessHp, endlessDmg = G.endlessScale()
+        hp, dmg = hp * endlessHp, dmg * endlessDmg
         BlzSetUnitMaxHP(u, math.max(1, math.floor(hp)))
         SetWidgetLife(u, hp)
         BlzSetUnitBaseDamage(u, math.max(1, math.floor(dmg)), 0)
@@ -2742,7 +2776,7 @@ do
         info.xp = isFinal and 80 or 40
         info.aura = AddSpecialEffectTarget(FX.bossAura, u, 'origin')
         info.slamAt = R.time + 5.0
-        info.slamDamage = def.dmg * R.zone.power ^ 0.7 * R.diff.dmg * 2.2
+        info.slamDamage = def.dmg * R.zone.power ^ 0.7 * R.diff.dmg * 2.2 * select(2, G.endlessScale())
         R.boss = u
         G.fx(FX.teleport, x, y, 1.5)
         if isFinal then
@@ -2781,7 +2815,7 @@ do
 
         -- Half way between bosses, a closing ring of the moment's weakest.
         local ringsDue = math.floor((R.time + 60) / 120)
-        if ringsDue > R.rings and not R.finalSpawned then
+        if ringsDue > R.rings and (R.endless or not R.finalSpawned) then
             R.rings = ringsDue
             local weakest = R.zone.enemies[(G.wavePool())]
             local n = math.min(12 + math.floor(G.progress() * 40), CFG.MAX_ENEMIES + 40 - R.enemyCount)
@@ -2797,8 +2831,20 @@ do
         end
 
         if R.time >= R.nextElite then
-            R.nextElite = R.nextElite + 45
+            R.nextElite = R.nextElite + (R.endless and CFG.ENDLESS_ELITE_EVERY or 45)
             G.spawnElite()
+        end
+
+        -- Endless mode: the zone's bosses, then its final boss, come back in
+        -- turn on a timer, each stronger with the endless minutes.
+        if R.endless then
+            if R.time >= R.nextEndlessBoss then
+                R.nextEndlessBoss = R.time + CFG.ENDLESS_BOSS_EVERY
+                local cycle = #R.zone.bosses + 1
+                R.endlessBoss = math.fmod(R.endlessBoss, cycle) + 1
+                G.spawnBoss(R.zone.bosses[R.endlessBoss] or R.zone.final, false)
+            end
+            return
         end
 
         local boss = R.zone.bosses[R.nextBoss]
@@ -3455,6 +3501,7 @@ do
             local u = CreateUnit(G.PLAYER, id, x, y, bj_RADTODEG * angle)
             if u then
                 SuspendHeroXP(u, true)
+                UnitRemoveAbility(u, FourCC('Ashm'))
                 SetUnitVertexColor(u, 150, 180, 255, 170)
                 SetUnitScale(u, R.baseScale, R.baseScale, R.baseScale)
                 BlzSetUnitMaxHP(u, math.max(1, math.floor(hp)))
@@ -3474,7 +3521,9 @@ do
         end
     end
 
-    -- The living image nearest to (x, y) within reach, if any.
+    -- The living image nearest to (x, y) within reach, if any. While the
+    -- hero is split (Storm, Earth and Fire), its spirits draw enemies the
+    -- same way, from any distance: the hidden hero cannot be fought.
     function G.decoyNear(x, y, reach)
         local best, bestD = nil, reach * reach
         for u in pairs(R.images) do
@@ -3482,6 +3531,16 @@ do
             local d = dx * dx + dy * dy
             if d < bestD and GetWidgetLife(u) > 0.405 then
                 best, bestD = u, d
+            end
+        end
+        if R.split then
+            bestD = math.huge
+            for _, u in ipairs(R.split.units) do
+                local dx, dy = GetUnitX(u) - x, GetUnitY(u) - y
+                local d = dx * dx + dy * dy
+                if d < bestD and R.summons[u] and GetWidgetLife(u) > 0.405 then
+                    best, bestD = u, d
+                end
             end
         end
         return best
@@ -3649,9 +3708,17 @@ do
             alive = alive + 1
         end
         local n = math.min(v.count, CFG.MAX_SUMMONS - alive)
+        if def.split then
+            -- The hero itself becomes the spirits: never short of one.
+            if R.split then
+                return false
+            end
+            n = v.count
+        end
         if n <= 0 then
             return false
         end
+        local spirits = {}
         for k = 1, n do
             local code
             if def.cycleUnits then
@@ -3667,7 +3734,9 @@ do
                 u = CreateUnit(G.PLAYER, FourCC(def.units[1]), x, y, 270)
             end
             if u then
-                UnitApplyTimedLife(u, FourCC('BTLF'), v.dur)
+                -- A split's spirits are taken back by G.endSplit; the timed
+                -- life is only a safety net.
+                UnitApplyTimedLife(u, FourCC('BTLF'), def.split and v.dur + 2 or v.dur)
                 BlzSetUnitBaseDamage(u, math.max(1, math.floor(v.dmg)), 0)
                 local hp = math.floor(def.hp * (1 + 0.25 * (inst.rank - 1)))
                 BlzSetUnitMaxHP(u, hp)
@@ -3675,7 +3744,11 @@ do
                 if def.birth then
                     G.fx(def.birth, x, y, 1.0)
                 end
-                R.summons[u] = {key = def.key, ward = def.ward}
+                if R.paused then
+                    PauseUnit(u, true)
+                end
+                R.summons[u] = {key = def.key, ward = def.ward, split = def.split}
+                spirits[#spirits + 1] = u
                 local target = G.nearest(x, y, 1200, 1)[1]
                 if target and not def.ward then
                     IssuePointOrder(u, 'attack', target.x, target.y)
@@ -3694,7 +3767,63 @@ do
                 end)
             end)
         end
+        if def.split and #spirits > 0 then
+            G.startSplit(spirits, v.dur)
+        end
         return true
+    end
+
+    -- Storm, Earth and Fire: the hero vanishes (hidden, invulnerable, no
+    -- attacks or casts) while its spirits fight; the player still steers
+    -- the spot they gather around. When the time is up or every spirit has
+    -- fallen, they merge back into the hero.
+    function G.startSplit(spirits, dur)
+        R.split = {units = spirits, untilT = R.time + dur}
+        R.invulnUntil = math.max(R.invulnUntil, R.split.untilT)
+        SetUnitVertexColor(R.hero, 255, 255, 255, 0)
+        G.fx(FX.teleport, R.hx, R.hy, 1.0)
+    end
+
+    function G.updateSplit()
+        local split = R.split
+        if split == nil then
+            return
+        end
+        local alive = 0
+        for _, u in ipairs(split.units) do
+            if R.summons[u] and GetWidgetLife(u) > 0.405 then
+                alive = alive + 1
+            end
+        end
+        if alive == 0 or R.time >= split.untilT then
+            G.endSplit()
+        end
+    end
+
+    function G.endSplit()
+        local split = R.split
+        R.split = nil
+        for _, u in ipairs(split.units) do
+            if R.summons[u] then
+                R.summons[u] = nil
+                if GetWidgetLife(u) > 0.405 then
+                    G.fx(FX.teleport, GetUnitX(u), GetUnitY(u), 0.8)
+                end
+                RemoveUnit(u)
+            end
+        end
+        -- Spirits that all fell early end the split's invulnerability too.
+        if R.invulnUntil == split.untilT then
+            R.invulnUntil = R.time
+        end
+        local alpha = 255
+        for _, buff in pairs(R.buffs) do
+            if buff.def.fade then
+                alpha = buff.def.fade
+            end
+        end
+        SetUnitVertexColor(R.hero, 255, 255, 255, alpha)
+        G.fx(FX.teleport, R.hx, R.hy, 1.0)
     end
 
     CAST.heal = function(inst, v)
@@ -3860,8 +3989,14 @@ do
             elseif kind == 'aura' then
                 G.updateAura(inst, dt)
             elseif kind ~= 'passive' then
-                inst.cd = inst.cd - dt
-                if inst.cd <= 0 then
+                -- The split's own cooldown starts once the spirits merge back.
+                if not (R.split and inst.def.split) then
+                    inst.cd = inst.cd - dt
+                end
+                -- A split hero (Storm, Earth and Fire) casts nothing until it merges.
+                if inst.cd <= 0 and R.split then
+                    inst.cd = 0
+                elseif inst.cd <= 0 then
                     if CAST[kind](inst, inst.v) then
                         inst.cd = inst.v.cd
                         -- A standing hero shows the cast (Spell, Spell Slam, ...).
@@ -3895,8 +4030,10 @@ do
             if GetWidgetLife(u) <= 0.405 then
                 R.summons[u] = nil
             elseif not info.ward then
+                -- Split spirits stay close to the spot the player steers.
+                local leash = info.split and 450 or 900
                 local dx, dy = GetUnitX(u) - R.hx, GetUnitY(u) - R.hy
-                if dx * dx + dy * dy > 900 * 900 then
+                if dx * dx + dy * dy > leash * leash then
                     IssuePointOrder(u, 'move', R.hx, R.hy)
                 elseif GetUnitCurrentOrder(u) == 0 then
                     local t = G.nearest(GetUnitX(u), GetUnitY(u), 1100, 1)[1]
@@ -4035,7 +4172,7 @@ do
 
     function G.updateAttack(dt)
         R.attackClock = R.attackClock - dt
-        if R.attackClock > 0 then
+        if R.attackClock > 0 or R.split then
             return
         end
         local s = R.stats
@@ -4150,6 +4287,7 @@ do
         if R == nil or R.ended then
             return
         end
+        G.updateSplit()
         G.updatePickups(dt)
         if R == nil or R.ended then
             return
@@ -4271,6 +4409,9 @@ do
         -- is what lets the hero attack while walking.
         UnitRemoveAbility(hero, FourCC('Aatk'))
         UnitRemoveAbility(hero, FourCC('Amov'))
+        -- Night Elf heroes (Warden, Priestess) carry Shadowmeld: a hero the
+        -- script moves never walks natively, so at night it stayed hidden.
+        UnitRemoveAbility(hero, FourCC('Ashm'))
         -- Standalone engine: right-clicks only report the point (no native
         -- walk that resets the animation and needs a stop), and swings and
         -- casts can play on the upper body while the legs keep walking.
@@ -4328,12 +4469,16 @@ do
         Hud.banner(U.col(GOLD, zone.name) .. '  -  ' .. zone.subtitle .. '  -  ' .. U.col(R.diff.hex, R.diff.name))
     end
 
-    function G.endRun(victory)
+    -- quiet: bank the run without the end screen (leaving endless mode from
+    -- the game menu). An endless run's victory was banked when the final
+    -- boss fell, so its end only adds what came after.
+    function G.endRun(victory, quiet)
         if R == nil or R.ended then
             return
         end
         R.ended = true
-        R.victory = victory
+        R.victory = victory or R.endless
+        victory = victory and not R.endless
         if R.hand then
             R.hand = nil
             Cards.hide()
@@ -4348,17 +4493,25 @@ do
         Hud.showWorldFrames(false)
 
         local p = Profile.data
-        local gold = math.floor(R.gold * R.diff.reward + 0.5)
+        local banked = R.banked or {gold = 0, kills = 0, bosses = 0}
+        local gold = math.floor((R.gold - banked.gold) * R.diff.reward + 0.5)
         if victory then
             gold = gold + math.floor(50 * R.zone.tier * R.diff.reward)
         end
         R.goldEarned = gold
         p.gold = p.gold + gold
         p.goldTotal = p.goldTotal + gold
-        p.kills = p.kills + R.kills
-        p.bosses = p.bosses + R.bosses
-        p.runs = p.runs + 1
+        p.kills = p.kills + R.kills - banked.kills
+        p.bosses = p.bosses + R.bosses - banked.bosses
+        if not R.endless then
+            p.runs = p.runs + 1
+        end
+        R.banked = {gold = R.gold, kills = R.kills, bosses = R.bosses}
         p.bestLevel = math.max(p.bestLevel, R.level)
+        if R.endless then
+            local zoneKey = tostring(R.zoneIndex)
+            p.endless[zoneKey] = math.max(p.endless[zoneKey] or 0, math.floor(R.time))
+        end
         if victory then
             local _, factionIndex = U.factionOf(R.def)
             p.wins = p.wins + 1
@@ -4391,7 +4544,36 @@ do
         end
         R.newAchievements = Profile.checkAchievements()
         Profile.save()
-        Finale.show()
+        if not quiet then
+            Finale.show()
+        end
+    end
+
+    -- The end screen's Endless button: the won run goes on where it stopped.
+    function G.continueEndless()
+        if R == nil or not R.ended or not R.victory or R.endless then
+            return
+        end
+        Finale.hide()
+        R.ended = false
+        R.endless = true
+        R.endlessAt = R.time
+        R.nextEndlessBoss = R.time + 60
+        R.endlessBoss = 0
+        R.nextElite = R.time + 20
+        -- The end screen lists only what endless mode adds.
+        R.loot = {}
+        R.newAchievements = nil
+        for u in pairs(R.enemies) do
+            PauseUnit(u, R.paused)
+        end
+        for u in pairs(R.summons) do
+            PauseUnit(u, R.paused)
+        end
+        PauseUnit(R.hero, R.paused)
+        Hud.showWorldFrames(not R.paused)
+        Hud.banner(U.col(RED, 'Endless mode') .. '  -  the horde grows stronger every minute')
+        G.tryOpenHand()
     end
 
     function G.cleanup()
@@ -4465,6 +4647,33 @@ do
         return def and def.name or key
     end
 
+    -- Character stats panel rows: label, icon (the blessing card that raises
+    -- the stat, else an ability), and the value as shown. base is the value
+    -- every hero starts with: anything better shows in green.
+    local function statPct(x)
+        return U.num(x * 100) .. '\037'
+    end
+    local function statBonus(x)
+        return (x >= 0 and '+' or '') .. statPct(x)
+    end
+    local STAT_ROWS = {
+        {label = 'Damage', bless = 'might', get = function(s) return s.damage, statBonus(s.damage) end},
+        {label = 'Attack speed', bless = 'ferocity', get = function(s) return s.attackSpeed, statBonus(s.attackSpeed) end},
+        {label = 'Critical chance', bless = 'precision', base = 0.05, get = function(s) return s.crit, statPct(s.crit) end},
+        {label = 'Critical damage', bless = 'brutality', base = 1.75, get = function(s) return s.critMult, statPct(s.critMult) end},
+        {label = 'Spell haste', bless = 'haste', get = function(s) return s.cdr, statBonus(s.cdr) end},
+        {label = 'Area', bless = 'reach', get = function(s) return s.area, statBonus(s.area) end},
+        {label = 'Spell duration', bless = 'persistence', get = function(s) return s.duration, statBonus(s.duration) end},
+        {label = 'Projectiles', bless = 'multishot', get = function(s) return s.multishot, '+' .. s.multishot end},
+        {label = 'Armor', bless = 'fortitude', get = function(s) return s.armor, U.num(s.armor) end},
+        {label = 'Dodge', code = 'AEev', icon = 'BTNEvasion', get = function(s) return s.dodge, statPct(s.dodge) end},
+        {label = 'Damage reduction', code = 'AHad', icon = 'BTNDevotion', get = function(s) return s.dr, statPct(s.dr) end},
+        {label = 'Regeneration', bless = 'regeneration', get = function(s) return s.regen, U.num(s.regen) .. ' /s' end},
+        {label = 'Life steal', bless = 'vampirism', get = function(s) return s.lifesteal, statPct(s.lifesteal) end},
+        {label = 'Movement speed', bless = 'swiftness', get = function(s) return s.move, statBonus(s.move) end},
+        {label = 'Pickup range', bless = 'magnetism', get = function(s) return s.pickup, statBonus(s.pickup) end}
+    }
+
     ---------------------------------------------------------------------------
     -- In-run HUD
     ---------------------------------------------------------------------------
@@ -4521,6 +4730,27 @@ do
             UI.showIcon(o, false)
             Hud.buffIcons[i] = o
         end
+
+        -- Character stats, under the hero frame and its buffs; the stats key
+        -- (C) shows or hides them (Profile.data.opts.stats = 0 when hidden).
+        Hud.statsRoot = UI.group(root)
+        local rowH = 0.0118 * k
+        x, top = tl(0, -0.114)
+        UI.plate(Hud.statsRoot, x, top, 0.156 * k, 0.03 * k + #STAT_ROWS * rowH, 215)
+        x, top = tl(0.01, -0.12)
+        Hud.statsTitle = UI.text(Hud.statsRoot, '', x, top, 0.136 * k, 0.014 * k, 0.0082 * k)
+        Hud.statRows = {}
+        for i, row in ipairs(STAT_ROWS) do
+            local rowTop = -0.137 - (i - 1) * 0.0118
+            local b = row.bless and BLESSING_BY_KEY[row.bless]
+            x, top = tl(0.01, rowTop + 0.0005)
+            UI.image(Hud.statsRoot, b and U.icon(b.code, b.icon) or U.icon(row.code, row.icon), x, top, 0.0098 * k, 0.0098 * k)
+            x, top = tl(0.024, rowTop)
+            UI.text(Hud.statsRoot, U.col('bfb6a8', row.label), x, top, 0.09 * k, rowH, 0.0072 * k)
+            x, top = tl(0.104, rowTop)
+            Hud.statRows[i] = UI.text(Hud.statsRoot, '', x, top, 0.042 * k, rowH, 0.0072 * k, TEXT_JUSTIFY_RIGHT)
+        end
+        Hud.statText = {}
 
         -- Clock and boss, top center.
         local function tc(dx, dtop)
@@ -4713,6 +4943,38 @@ do
             G.describeBlessing(item.stat, Profile.itemValue(item, ilvl)))
     end
 
+    -- The stats panel's values; a row only gets new text when it changed.
+    function Hud.refreshStats()
+        local shown = Profile.data.opts.stats ~= 0
+        BlzFrameSetVisible(Hud.statsRoot, shown)
+        if not shown or R == nil or R.stats == nil then
+            return
+        end
+        local texts = Hud.statText
+        local title = U.col(GOLD, 'Stats') .. U.col(GREY, '   ' .. Keys.label('stats') .. ' to hide')
+        if texts.title ~= title then
+            texts.title = title
+            BlzFrameSetText(Hud.statsTitle, title)
+        end
+        for i, row in ipairs(STAT_ROWS) do
+            local value, text = row.get(R.stats)
+            text = U.col(value > (row.base or 0) + 0.0001 and GREEN or 'd8cfc0', text)
+            if texts[i] ~= text then
+                texts[i] = text
+                BlzFrameSetText(Hud.statRows[i], text)
+            end
+        end
+    end
+
+    function Hud.toggleStats()
+        local opts = Profile.data.opts
+        opts.stats = (opts.stats == 0) and 1 or 0
+        if R and Hud.statsRoot then
+            Hud.refreshStats()
+        end
+        Profile.save()
+    end
+
     -- A new interface size: build the HUD again in place.
     function Hud.rebuild()
         if Hud.root then
@@ -4844,7 +5106,12 @@ do
         BlzFrameSetText(Hud.clock, U.col(GOLD, U.time(R.time)))
 
         local nextBoss = R.zone.bosses[R.nextBoss]
-        if nextBoss then
+        if R.endless then
+            local hpScale = G.endlessScale()
+            local boss = R.zone.bosses[math.fmod(R.endlessBoss, #R.zone.bosses + 1) + 1] or R.zone.final
+            BlzFrameSetText(Hud.subline, U.col(RED, 'Endless') .. U.col(GREY, '  -  enemy health x' .. U.num(hpScale)
+                .. '  -  ' .. boss.name .. ' in ' .. U.time(math.max(0, R.nextEndlessBoss - R.time))))
+        elseif nextBoss then
             BlzFrameSetText(Hud.subline, U.col(GREY, 'next boss in ' .. U.time(nextBoss.t - R.time) .. '  -  ' .. nextBoss.name))
         elseif not R.finalSpawned then
             BlzFrameSetText(Hud.subline, U.col(RED, R.zone.final.name .. ' arrives in ' .. U.time(CFG.RUN_LENGTH - R.time)))
@@ -4925,6 +5192,7 @@ do
 
         BlzFrameSetText(Hud.counters, U.col(GREY, 'Kills ') .. U.big(R.kills) .. U.col(GREY, '    Gold ')
             .. U.col(GOLD, U.big(R.gold)) .. U.col(GREY, '    Rerolls ') .. R.rerolls)
+        Hud.refreshStats()
 
         Hud.meterClock = (Hud.meterClock or 0) - 1
         if Hud.meterClock <= 0 then
@@ -5137,6 +5405,17 @@ do
         G.setPaused(true)
         Cards.render()
         BlzFrameSetVisible(Cards.root, true)
+        -- Test aid (engine): +set survivor_autopick 1 takes the first card,
+        -- so long unattended runs never stall on a hand.
+        if Engine.active() and EngineCvar('survivor_autopick') == '1' then
+            local hand = R.hand
+            TimerStart(CreateTimer(), 0.3, false, function()
+                DestroyTimer(GetExpiredTimer())
+                if R and R.hand == hand then
+                    UI.safe(Cards.pick, 1)
+                end
+            end)
+        end
     end
 
     function Cards.hide()
@@ -5369,12 +5648,31 @@ do
             G.cleanup()
             G.startRun()
         end, 'dark', 0.012)
+        -- After a victory, a third button keeps the run going (endless mode).
+        Finale.endless = UI.button(root, 0.485, 0.163, 0.14, 0.038, U.col(RED, 'Endless Mode'), function()
+            G.continueEndless()
+        end, 'red', 0.012)
         BlzFrameSetVisible(root, false)
+    end
+
+    -- Two buttons side by side, or three when endless mode is offered.
+    function Finale.layoutButtons(offerEndless)
+        if offerEndless then
+            UI.moveButton(Finale.camp, 0.175, 0.163, 0.14, 0.038)
+            UI.moveButton(Finale.again, 0.33, 0.163, 0.14, 0.038)
+        else
+            UI.moveButton(Finale.camp, 0.205, 0.163, 0.18, 0.038)
+            UI.moveButton(Finale.again, 0.415, 0.163, 0.18, 0.038)
+        end
+        UI.showButton(Finale.endless, offerEndless)
     end
 
     function Finale.show()
         local run = R
-        if run.victory then
+        Finale.layoutButtons(run.victory and not run.endless)
+        if run.endless then
+            BlzFrameSetText(Finale.title, U.col(RED, 'ENDLESS') .. U.col(GREY, '  -  ') .. U.col(GOLD, U.time(run.time)))
+        elseif run.victory then
             BlzFrameSetText(Finale.title, U.col('5cff7a', 'VICTORY'))
         else
             BlzFrameSetText(Finale.title, U.col(RED, 'DEFEAT'))
@@ -5399,7 +5697,10 @@ do
             UI.showIcon(o, drop ~= nil)
         end
         local lines = {}
-        if run.diff.key == 'mplus' then
+        if run.endless then
+            lines[#lines + 1] = U.col(GREY, 'Endless mode for ') .. U.time(run.time - run.endlessAt)
+                .. U.col(GREY, '  -  best here ') .. U.time(Profile.data.endless[tostring(run.zoneIndex)] or 0)
+        elseif run.diff.key == 'mplus' then
             if run.victory and (run.keyUpgrade or 0) > 0 then
                 lines[#lines + 1] = U.col('ff8000', 'Keystone +' .. run.diff.level .. ' timed!') .. U.col(GREEN, '  +'
                     .. run.keyUpgrade .. '  -  up to +' .. Profile.keyMax(run.zoneIndex) .. ' is open')
@@ -5413,7 +5714,7 @@ do
             end
         end
         local rank = ZONES[run.zoneIndex].rank
-        if run.victory and rank < #ZONES and Profile.data.unlocked > rank then
+        if run.victory and not run.endless and rank < #ZONES and Profile.data.unlocked > rank then
             lines[#lines + 1] = U.col(GREEN, ZONES[ZONE_ORDER[rank + 1]].name .. ' is open.')
         end
         BlzFrameSetText(Finale.achievements, table.concat(lines, '\n'))
@@ -5498,6 +5799,7 @@ do
         {key = 'card3', label = 'Pick card 3', default = 51},
         {key = 'card4', label = 'Pick card 4', default = 52},
         {key = 'reroll', label = 'Reroll the cards', default = 82},
+        {key = 'stats', label = 'Show or hide the stats', default = 67},
         {key = 'play', label = 'Enter the zone (lobby)', default = 32}
     }
     local ACTION_BY_KEY = {}
@@ -5653,13 +5955,21 @@ do
         Options.interface = menuButton('Interface', function()
             Options.setPage('interface')
         end)
+        -- Leaving endless mode keeps what it earned (the victory is banked already).
+        local function bankEndless()
+            if R and R.endless and not R.ended then
+                G.endRun(false, true)
+            end
+        end
         Options.restart = menuButton('Restart Run', function()
             Options.hide()
+            bankEndless()
             G.cleanup()
             G.startRun()
         end)
         Options.menu = menuButton('Main Menu', function()
             Options.hide()
+            bankEndless()
             if Engine.active() then
                 Engine.returnToMenu()
                 return
@@ -7357,6 +7667,10 @@ do
             return
         end
         if Options.open or difficultyOpen then
+            return
+        end
+        if name == 'stats' then
+            Hud.toggleStats()
             return
         end
         if R and R.hand then
