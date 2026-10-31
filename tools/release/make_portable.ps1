@@ -62,7 +62,7 @@ Get-ChildItem -LiteralPath (Join-Path $trim 'data') -Force |
 Remove-Item -LiteralPath $trim -Recurse -Force
 
 $launcher = Join-Path $stage 'WarcraftSurvivors.exe'
-& $csc /nologo /target:winexe /optimize+ /reference:System.Windows.Forms.dll `
+& $csc /nologo /target:winexe /optimize+ /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll `
     "/out:$launcher" (Join-Path $PSScriptRoot 'warcraft_survivors_launcher.cs')
 if ($LASTEXITCODE -ne 0) {
     throw "Launcher compilation failed with exit code $LASTEXITCODE"
@@ -80,7 +80,16 @@ engine, its configuration, and the survivor scripts.
 This package includes Blizzard game data taken from the builder's local install.
 
 Progress is saved in %APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\.
+
+When a new version is out, the game says so on its main screen and can
+download it (only the files that changed) and restart. Updates never touch
+your progress.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding UTF8
+
+# version.json: this build's version and files, which the launcher compares
+# with the uploaded release (SURVIVOR_ENGINE.update) to offer updates.
+& python (Join-Path $PSScriptRoot 'portable_manifest.py') write $stage
+if ($LASTEXITCODE -ne 0) { throw "portable_manifest.py write failed ($LASTEXITCODE)" }
 
 $backup = $null
 if (Test-Path -LiteralPath $destination) {
@@ -100,6 +109,13 @@ try {
     }
     throw
 }
+
+# The update folder players' launchers download from (download/portable/ on
+# the site, stage_survivor_upload.py --portable-update). Unchanged files keep
+# their timestamp, so a WinSCP synchronize uploads only what changed.
+$update = Join-Path $out 'update\portable'
+& python (Join-Path $PSScriptRoot 'portable_manifest.py') stage $destination $update
+if ($LASTEXITCODE -ne 0) { throw "portable_manifest.py stage failed ($LASTEXITCODE)" }
 
 # The browser lobby's Download button serves this zip (stage_survivor_upload.py --download).
 $zip = Join-Path $out 'WarcraftSurvivors.zip'

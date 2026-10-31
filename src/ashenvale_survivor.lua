@@ -2054,7 +2054,7 @@ do
     -- Game engine
     ---------------------------------------------------------------------------
     local G = {}
-    local Hud, Cards, Finale, Lobby, Engine, Options, Keys = {}, {}, {}, {}, {}, {}, {}
+    local Hud, Cards, Finale, Lobby, Engine, Options, Keys, Updater = {}, {}, {}, {}, {}, {}, {}, {}
     local R = nil -- the current run, nil while in the lobby
     -- keys: action -> held; down: key code -> held (to tell a press from its repeats).
     local S = {heroIndex = 1, faction = 'Alliance', zone = 1, difficulty = 1, keyLevel = 2, tab = 'character', keys = {},
@@ -6315,6 +6315,13 @@ do
         UI.button(root, LAY.x0, 0.596, 0.1, 0.024, 'Options  ' .. U.col(GREY, '[Esc]'), function()
             Options.show()
         end, 'dark', 0.0088)
+        -- Portable build: an update the player put off stays one click away.
+        if Updater.enabled() then
+            Lobby.updateButton = UI.button(root, LAY.x0 + 0.108, 0.596, 0.11, 0.024, U.col(GREEN, 'Update available'), function()
+                Updater.show()
+            end, 'green', 0.0088)
+            UI.showButton(Lobby.updateButton, false)
+        end
         Lobby.tabs = {}
         local tabW, tabGap = 0.104, 0.008
         local x0 = 0.4 - (#TABS * tabW + (#TABS - 1) * tabGap) / 2
@@ -6336,6 +6343,9 @@ do
         Lobby.buildDifficulty(root)
         Lobby.footer = UI.text(root, '', LAY.x0, 0.029, LAY.w, 0.012, 0.0076, TEXT_JUSTIFY_CENTER)
         Lobby.updateFooter()
+        if Engine.active() and SURVIVOR_ENGINE.version then
+            UI.text(root, U.col(GREY, 'v' .. SURVIVOR_ENGINE.version), LAY.x1 - 0.1, 0.016, 0.1, 0.012, 0.0072, TEXT_JUSTIFY_RIGHT)
+        end
         BlzFrameSetVisible(root, false)
     end
 
@@ -7675,6 +7685,13 @@ do
     function G.onAction(name)
         -- The difficulty window takes Escape and keeps Space from starting a run behind it.
         local difficultyOpen = Lobby.D and Lobby.D.open and not Options.open
+        -- The update window takes Escape as Later (not while downloading).
+        if Updater.open then
+            if name == 'menu' and Updater.state == 'offer' then
+                Updater.later()
+            end
+            return
+        end
         if name == 'menu' then
             if difficultyOpen then
                 Lobby.closeDifficulty()
@@ -7763,6 +7780,7 @@ do
         Finale.build()
         Lobby.build()
         Options.build()
+        Updater.build()
 
         local damage = CreateTrigger()
         TriggerRegisterAnyUnitEventBJ(damage, EVENT_PLAYER_UNIT_DAMAGED)
@@ -7866,6 +7884,199 @@ do
         S.difficulty, S.keyLevel = tonumber(difficulty), tonumber(key)
         S.faction = HEROES[S.heroIndex].faction
         return true
+    end
+
+    ---------------------------------------------------------------------------
+    -- Updater (portable Windows build only). The launcher
+    -- (tools/release/warcraft_survivors_launcher.cs) starts the engine with
+    -- +set survivor_updater <token>, checks the uploaded release in the
+    -- background and talks to the game through preload files under
+    -- CustomMapData\WarcraftSurvivors\Update: info.pld (a newer version, its
+    -- notes and download size, or state 'none'), request.pld (written here by
+    -- Download & restart) and progress.pld (the download, then ready or error).
+    -- Each file carries the token, so a file left by another session is
+    -- ignored. Once the files are in, the game quits and the launcher swaps
+    -- them and starts the new version.
+    ---------------------------------------------------------------------------
+    local UPDATE_DIR = 'WarcraftSurvivors\\Update\\'
+    local UW = {x = 0.22, top = 0.43, w = 0.36, h = 0.2}
+
+    function Updater.enabled()
+        return Engine.active() and not Engine.web() and (EngineCvar('survivor_updater') or '') ~= ''
+    end
+
+    -- Runs one of the launcher's files; its Lua block sets a global table.
+    function Updater.read(file, global)
+        rawset(_G, global, nil)
+        Preloader(UPDATE_DIR .. file)
+        local t = rawget(_G, global)
+        if type(t) == 'table' and t.token == Updater.token then
+            return t
+        end
+        return nil
+    end
+
+    function Updater.mb(bytes)
+        return string.format('\037.1f MB', (bytes or 0) / 1048576)
+    end
+
+    function Updater.build()
+        if not Updater.enabled() then
+            return
+        end
+        Updater.token = EngineCvar('survivor_updater')
+        Updater.attempt = 0
+        local W = {}
+        Updater.W = W
+        local group = UI.group(UI.game)
+        BlzFrameSetLevel(group, 10)
+        W.group = group
+        UI.box(group, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 170)
+        BlzFrameSetLevel(UI.hit(group, -0.3, 0.6, 1.4, 0.6), 0)
+        local x, T, w = UW.x, UW.top, UW.w
+        UI.card(group, x, T, w, UW.h)
+        local ix, iw = x + 0.024, w - 0.048
+        W.title = UI.text(group, '', x, T - 0.02, w, 0.03, 0.019, TEXT_JUSTIFY_CENTER)
+        W.versions = UI.text(group, '', x, T - 0.052, w, 0.02, 0.012, TEXT_JUSTIFY_CENTER)
+        W.notes = UI.text(group, '', ix, T - 0.08, iw, 0.05, 0.0088, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP)
+        W.size = UI.text(group, '', ix, T - 0.132, iw, 0.014, 0.0078, TEXT_JUSTIFY_CENTER)
+        W.download = UI.button(group, 0.29, T - 0.152, 0.14, 0.032, U.col(GOLD, 'Download & restart'), function()
+            Updater.download()
+        end, 'red', 0.0105)
+        W.later = UI.button(group, 0.44, T - 0.152, 0.07, 0.032, U.col(GOLD, 'Later'), function()
+            Updater.later()
+        end, 'dark', 0.0105)
+        W.percent = UI.text(group, '', x, T - 0.078, w, 0.026, 0.016, TEXT_JUSTIFY_CENTER)
+        W.bar = UI.bar(group, ix + 0.01, T - 0.116, iw - 0.02, 0.012, 255, 196, 64)
+        W.detail = UI.text(group, '', ix, T - 0.142, iw, 0.014, 0.0078, TEXT_JUSTIFY_CENTER)
+        BlzFrameSetVisible(group, false)
+        TimerStart(CreateTimer(), 0.25, true, function()
+            UI.safe(Updater.poll)
+        end)
+    end
+
+    -- offer: notes and the two buttons; progress: percent and bar.
+    function Updater.setMode(mode)
+        local W = Updater.W
+        local offer = mode == 'offer'
+        BlzFrameSetVisible(W.notes, offer)
+        BlzFrameSetVisible(W.size, offer)
+        UI.showButton(W.download, offer)
+        UI.showButton(W.later, offer)
+        for _, f in ipairs({W.percent, W.detail, W.bar.back, W.bar.fill, W.bar.edge, W.bar.text}) do
+            BlzFrameSetVisible(f, not offer)
+        end
+    end
+
+    function Updater.offer(errorText)
+        local W, info = Updater.W, Updater.info
+        Updater.setMode('offer')
+        BlzFrameSetText(W.title, U.col(GOLD, errorText and 'The download failed' or 'A new version is out!'))
+        BlzFrameSetText(W.versions, U.col('d8cfc0', 'v' .. tostring(SURVIVOR_ENGINE.version or '?')) .. '   '
+            .. U.col(GOLD, '>') .. '   ' .. U.col(GREEN, 'v' .. tostring(info.version)))
+        BlzFrameSetText(W.notes, errorText and U.col(RED, errorText) or U.col('ffffff', tostring(info.notes or '')))
+        local files = tonumber(info.files) or 0
+        BlzFrameSetText(W.size, U.col(GREY, Updater.mb(info.size) .. ' download (' .. files
+            .. (files == 1 and ' file' or ' files') .. ')  -  the game restarts when it is done'))
+        UI.setLabel(W.download, U.col(GOLD, errorText and 'Retry' or 'Download & restart'))
+    end
+
+    function Updater.show()
+        Updater.open = true
+        Updater.state = 'offer'
+        UI.showButton(Lobby.updateButton, false)
+        Updater.offer()
+        BlzFrameSetVisible(Updater.W.group, true)
+        -- Test aid: +set survivor_update_auto 1 presses Download & restart.
+        if EngineCvar('survivor_update_auto') == '1' then
+            Updater.download()
+        end
+    end
+
+    -- Later: the lobby keeps an Update button; the choice outlives the map
+    -- change of a run (a console variable), so the window does not come back.
+    function Updater.later()
+        EngineCvar('survivor_update_later', tostring(Updater.info.version))
+        Updater.open = false
+        Updater.state = 'later'
+        BlzFrameSetVisible(Updater.W.group, false)
+        UI.showButton(Lobby.updateButton, true)
+    end
+
+    function Updater.download()
+        local W = Updater.W
+        Updater.attempt = Updater.attempt + 1
+        PreloadGenClear()
+        Preload(Updater.token .. ' ' .. Updater.attempt)
+        PreloadGenEnd(UPDATE_DIR .. 'request.pld')
+        Updater.state = 'downloading'
+        Updater.setMode('progress')
+        BlzFrameSetText(W.title, U.col(GOLD, 'Downloading'))
+        BlzFrameSetText(W.percent, U.col('ffffff', '0\037'))
+        BlzFrameSetText(W.detail, U.col(GREY, 'Starting...'))
+        UI.setBar(W.bar, 0)
+    end
+
+    function Updater.progress(p)
+        local W = Updater.W
+        if p.state == 'ready' then
+            Updater.state = 'restarting'
+            BlzFrameSetText(W.title, U.col(GOLD, 'Restarting'))
+            BlzFrameSetText(W.percent, U.col('ffffff', '100\037'))
+            BlzFrameSetText(W.detail, U.col(GREY, 'Installing v' .. tostring(Updater.info.version) .. '...'))
+            UI.setBar(W.bar, 1)
+            Profile.save()
+            TimerStart(CreateTimer(), 0.6, false, function()
+                UI.safe(rawget(_G, 'EngineQuit'))
+            end)
+        elseif p.state == 'error' then
+            Updater.state = 'offer'
+            Updater.offer(tostring(p.error or 'Unknown error'))
+        else
+            local total = math.max(1, tonumber(p.total) or 1)
+            local done = math.min(total, tonumber(p.done) or 0)
+            local speed = tonumber(p.speed) or 0
+            BlzFrameSetText(W.percent, U.col('ffffff', math.floor(100 * done / total) .. '\037'))
+            local detail = Updater.mb(done) .. ' of ' .. Updater.mb(total)
+            if speed > 0 then
+                detail = detail .. '  -  ' .. Updater.mb(speed) .. '/s  -  '
+                    .. math.ceil((total - done) / speed) .. 's left'
+            end
+            BlzFrameSetText(W.detail, U.col(GREY, detail))
+            UI.setBar(W.bar, done / total)
+        end
+    end
+
+    -- Lobby only: runs play on other maps, and the menu map reboots the script.
+    function Updater.poll()
+        if S.screen ~= 'lobby' or R ~= nil then
+            return
+        end
+        Updater.clock = (Updater.clock or 0) + 1
+        if Updater.state == nil then
+            -- Once a second until the launcher has checked.
+            if math.fmod(Updater.clock, 4) ~= 1 then
+                return
+            end
+            local info = Updater.read('info.pld', 'SurvivorUpdateInfo')
+            if info == nil then
+                return
+            end
+            Updater.info = info
+            if info.state ~= 'update' or info.version == nil then
+                Updater.state = 'none'
+            elseif EngineCvar('survivor_update_later') == tostring(info.version) then
+                Updater.state = 'later'
+                UI.showButton(Lobby.updateButton, true)
+            else
+                Updater.show()
+            end
+        elseif Updater.state == 'downloading' then
+            local p = Updater.read('progress.pld', 'SurvivorUpdateProgress')
+            if p and tonumber(p.attempt) == Updater.attempt then
+                Updater.progress(p)
+            end
+        end
     end
 
     -- Entry point: call Survivor_Start() from a Map Initialization trigger.

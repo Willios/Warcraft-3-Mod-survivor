@@ -65,8 +65,10 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   writes `release\Warcraft Survivors Portable\` (launcher exe, `OpenRealm\` engine + scripts, `Data\`). `Data\` holds
   only the web build's trimmed archives and the 12 arena maps (`make_survivor_data.py` run into a temporary folder,
   ~200 MB instead of the whole 1.5 GB install); the engine mounts them natively the same way. An existing portable
-  folder is moved to `.previous-<stamp>` first. `release\Warcraft Survivors Portable\` is the user's own copy (never
-  rebuild over it unasked); the shared one is `-Name 'Warcraft Survivors'` (`release\Warcraft Survivors\`). Neither
+  folder is moved to `.previous-<stamp>` first. Releases are built with `-Name 'Warcraft Survivors'`
+  (`release\Warcraft Survivors\`, the source of `release\update\portable\` and the zip). Since 2026-10-31 the user
+  plays and tests with a copy downloaded from the site's zip, which updates itself like a friend's: it lives outside
+  the repository (never touch or rebuild it); a change reaches it by publishing a release. Neither
   holds a save: progress is `%APPDATA%\...\profile.pld` per PC, so a friend starts blank (Ashenvale only); the user's
   portable shows every zone because it shares the dev profile. Run with `APPDATA=<empty dir>` to see a blank start.
   The script also writes `release\WarcraftSurvivors.zip` (from the folder just built), which the browser
@@ -75,6 +77,27 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   `stage_survivor_upload.py ... --download ../release/WarcraftSurvivors.zip`. The button calls `EngineOpenURL(url)`
   (engine-only native, `MenuAction("openurl")` -> `CL_OpenURL` in `cl_main.c`: a temporary `<a download>` on the page,
   `SDL_OpenURL` natively).
+- **Portable self-update (since 2026-10-31):** `SURVIVOR_ENGINE.version`/`notes`/`update` in `src/engine_boot.lua`
+  (**raise `version` and rewrite `notes` for every release**; the lobby shows `v<version>` bottom right).
+  `make_portable.ps1` runs `tools/release/portable_manifest.py write` (the folder's `version.json`: version, notes,
+  update URL from the build's own `engine_boot.lua`, every file with size + sha1) and `stage` into
+  `release\update\portable\` (`version.json` + `files\<path>`; unchanged files keep their timestamp, so a WinSCP
+  synchronize uploads only what changed). `stage_survivor_upload.py ... --portable-update ../release/update/portable`
+  puts it at `download/portable/` (= `SURVIVOR_ENGINE.update`); `survivor.htaccess` serves `version.json` no-cache.
+  The launcher (`warcraft_survivors_launcher.cs`, compiled with `System.Web.Extensions.dll` for JSON) starts the
+  engine with `+set survivor_updater <token>`, fetches the served `version.json` in the background and, when newer,
+  writes `info.pld` to `%APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\Update\` (preload files are the only
+  files the script can read: `Preloader` runs their Lua block). The lobby (`Updater` in the script, menu map only)
+  shows the window: notes, size, **Download & restart** / **Later** (Escape; leaves an "Update available" button,
+  kept across map changes by the `survivor_update_later` cvar). Download writes `request.pld`; the launcher fetches
+  only files whose sha1 differs into `.update\`, verifies each, reports `progress.pld` (bar, MB/s, time left; or an
+  error with Retry), then the game quits (`EngineQuit`), the launcher moves old files to `.update-backup\` (rolled
+  back on failure), drops files gone from the release, writes the new `version.json` and starts the new launcher
+  (which deletes the backup holding the old exe). Saves are never touched. Test args: `--update-url <folder URL>`,
+  and everything after `--` goes to the engine; `+set survivor_update_auto 1` presses Download. Tested end to end on
+  copies in the scratchpad with a throttled local server (offer, Later, progress, restart into the new version with
+  the launcher replaced, a file removed, a 404 -> Retry). Builds without `version.json` (every portable zip before
+  this) cannot update: players download once by hand.
 - Quick rebuild without the broken packaging step: from MSYS2 UCRT64 in `engine/`,
   `make -j8 OS=Windows_NT BIN_DIR=build-windows/bin LIB_DIR=build-windows/lib openwarcraft3`, then copy
   `build-windows\bin\openwarcraft3.exe` and `build-windows\lib\*.dll` into `dist\windows\`.

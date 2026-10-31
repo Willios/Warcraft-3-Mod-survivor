@@ -18,6 +18,13 @@ SURVIVOR_ENGINE = {
     -- The browser lobby's Download button: the portable Windows build
     -- (tools/release/make_portable.ps1, zipped), uploaded beside the page.
     download = 'https://warcraftsurvivor.para-bellum.eu/download/WarcraftSurvivors.zip',
+    -- This build's version and what is new in it. tools/release/portable_manifest.py
+    -- copies both into the portable build's version.json; the portable launcher
+    -- compares it with the one under update (the uploaded release) and the
+    -- lobby offers the newer one (Updater). Raise the version for every release.
+    version = '1.0.0',
+    notes = 'The Windows version now updates itself: when a new version is out, the game tells you what changed and downloads only the files that changed.',
+    update = 'https://warcraftsurvivor.para-bellum.eu/download/portable/',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art
         [2] = {map = 'Maps\\FrozenThrone\\(2)TerenasStand.w3x', loading = 2}, -- Westfall: Village tileset (farms), Lordaeron art
