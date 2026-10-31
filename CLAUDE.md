@@ -97,7 +97,9 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   and everything after `--` goes to the engine; `+set survivor_update_auto 1` presses Download. Tested end to end on
   copies in the scratchpad with a throttled local server (offer, Later, progress, restart into the new version with
   the launcher replaced, a file removed, a 404 -> Retry). Builds without `version.json` (every portable zip before
-  this) cannot update: players download once by hand.
+  this) cannot update: players download once by hand. First live update 1.0.0 -> 1.1.0 (boss telegraphs) worked on
+  2026-10-31 (8 files, 8.9 MB). After an upload, check every changed file's sha1 on the live site against
+  `version.json` before players see it: the first upload of 1.1.0 left the 8 changed files out (old copies served).
 - Quick rebuild without the broken packaging step: from MSYS2 UCRT64 in `engine/`,
   `make -j8 OS=Windows_NT BIN_DIR=build-windows/bin LIB_DIR=build-windows/lib openwarcraft3`, then copy
   `build-windows\bin\openwarcraft3.exe` and `build-windows\lib\*.dll` into `dist\windows\`.
@@ -120,6 +122,11 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   zone thumbnail), `test_weapon.lua` (prints the weapon fields of a few heroes), `test_trees.lua`
   (probes trees with an item: every tree must move it). Their source is `tools/engine_tests/`
   (versioned); copy them to `dist` like the `src/` scripts.
+
+## Co-op (planned, not started)
+
+`docs/coop-plan.md`: online co-op through a WebSocket relay on the WoW VPS (no LAN, no EOS: EOS has no browser
+SDK), host-authoritative, agreed balance, resource estimates. The user is still deciding; do not start without them.
 
 ## Web version (since 2026-10-30)
 
@@ -268,6 +275,23 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
   load); without one the clip plays on the whole model. The hero swings and casts this way while
   walking (`G.heroSwing`, `R.upperAnim`); standing, it plays the whole-body sequence.
 - `EngineUnitAnimation(unit)` (test aid) returns the sequence name, frame and upper clip the engine plays.
+- Ground telegraphs (2026-10-31, WoW-style boss warnings; neither open-realm, azeroth-survivors-re nor benilla has
+  one, benilla only has the 1.12 AoE reticle, `Spell-Shadow-*.blp` projected on the ground):
+  `EngineTelegraph{shape='circle'|'ring'|'cone'|'line', x, y, angle (deg), radius, inner, arc (deg), length, width,
+  duration (s), r, g, b, a, flash}` returns an id, `EngineTelegraphStop(id[, fade])` fades it without the flash.
+  Server: `G_SendGroundTelegraph` (`g_effects.c`) sends one `TE_GROUND_TELEGRAPH` temp event (`groundTelegraph_t`
+  in `common/shared.h`). Client (`cl_tent.c`, `CL_AddTelegraphs`) owns the timeline from its arrival: 150 ms fade
+  and grow-in, fill swept from the origin to the edge over `duration`, then a 450 ms flash and fade (250 ms fade
+  without flash), and fills `viewDef.telegraphs`. Renderer: `games/warcraft-3/renderer/r_telegraph.c`, one splat
+  rect per telegraph whose UVs are the world XY, so the fragment shader draws any shape/angle procedurally (body
+  faint in the middle and denser at the edge, outward ripples, bright rim + outer glow pulsing faster near the hit,
+  hot fill with a bright front band). Drawn after the splat rects, so water draws over it (tinted in shallows).
+  Script: `G.telegraph(spec)` (Flame Strike art on Reforged), `G.inTelegraph` (hit test), `G.bossCast` cycles
+  `G.bossKits` (bosses: slam, cleave, slam, charge; final: slam, cleave, nova, charge, every 6.5 / 5.5 s);
+  the boss stands still while it casts aimed spells (`info.casting`, `G.updateHeld`: Reforged counts
+  `BlzPauseUnitEx`, the engine keeps a flag). Test aids: `+set survivor_boss final` (or 1-4) brings that boss in at
+  3 s; `tools/engine_tests/test_telegraph.lua` (add-on) loops all four shapes around the hero, or with
+  `+set telegraph_shapes 0 +set telegraph_kite 1` keeps the hero alive and slides it around the boss.
 - Movement/animation test: `Scripts/Survivor/test_moveanim.lua` steers the hero with the same orders
   a right-click gives (re-clicks every 0.4 s, a tree click at 20 s) and logs `MOVEANIM` lines (sequence,
   upper clip, position) for 30 s. Run it with `+set survivor_run "5 1 1 2"` and `+exec pickcards.cfg`
@@ -478,6 +502,13 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-10-31:** Telegraph work: a Python patch passed through a Bash heredoc turned `\n` inside C strings into real
+  newlines and broke the engine build (fifth time for this lesson), and a later heredoc silently missed a `\037`
+  replacement. Also, the client read `MAX(0, MSG_ReadLong(msg))`: the macro evaluates its argument twice, so it read
+  two longs, desynced the message and dropped every later temp event in the packet (only the first telegraph of each
+  batch arrived, with the colour as its duration). Lesson: edits with `\` go through the Edit tool, no exceptions;
+  never pass a reading/side-effect call to `MIN`/`MAX`, read into a variable first.
 
 - **2026-10-31:** `make_portable.ps1` failed halfway: Claude's Bash shell had `cd`'d into
   `release\Warcraft Survivors Portable\OpenRealm` to list it, which locked the folder, so `Move-Item` copied

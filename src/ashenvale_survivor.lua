@@ -2529,7 +2529,18 @@ do
         info.stunUntil = math.max(info.stunUntil, R.time + duration)
         if not info.stunned then
             info.stunned = true
-            BlzPauseUnitEx(u, true)
+            G.updateHeld(u, info)
+        end
+    end
+
+    -- An enemy stands still while stunned or while a boss casts. Reforged counts
+    -- BlzPauseUnitEx calls and the engine keeps a flag, so it is called only when
+    -- the wanted state changes.
+    function G.updateHeld(u, info)
+        local want = (info.stunned or info.casting) and R.enemies[u] ~= nil
+        if want ~= (info.held == true) then
+            info.held = want
+            BlzPauseUnitEx(u, want)
         end
     end
 
@@ -2867,7 +2878,7 @@ do
         for u, info in pairs(R.enemies) do
             if info.stunned and t >= info.stunUntil then
                 info.stunned = false
-                BlzPauseUnitEx(u, false)
+                G.updateHeld(u, info)
             end
             if info.slowPct > 0 and t >= info.slowUntil then
                 info.slowPct = 0
@@ -2889,7 +2900,7 @@ do
                 SetUnitPosition(u, nx, ny)
                 info.target = R.hero
                 IssueTargetOrder(u, 'attack', R.hero)
-            elseif not info.stunned then
+            elseif not info.stunned and not info.casting then
                 -- Mirror Images draw every enemy near them away from the hero.
                 local want = G.decoyNear(x, y, CFG.DECOY_REACH) or R.hero
                 if want ~= info.target or GetUnitCurrentOrder(u) == 0 then
@@ -2897,9 +2908,9 @@ do
                     IssueTargetOrder(u, 'attack', want)
                 end
             end
-            if info.boss and t >= info.slamAt and not info.stunned then
-                info.slamAt = t + 6.5
-                G.bossSlam(u, info)
+            if info.boss and t >= info.slamAt and not info.stunned and not info.casting then
+                info.slamAt = t + (info.final and 5.5 or 6.5)
+                G.bossCast(u, info)
             end
         end
         R.dmgTick = true
@@ -2909,21 +2920,170 @@ do
         R.dmgTick = false
     end
 
-    -- Telegraphed ground slam: get out of the circle.
-    function G.bossSlam(u, info)
-        local x, y = R.hx, R.hy
-        G.timedFx(FX.warning, x, y, 1.6, 1.2)
+    -- Ground telegraphs, World of Warcraft style: the shape is drawn on the
+    -- ground, a fill sweeps from its origin to the edge over the cast and the hit
+    -- lands on whoever still stands inside when it flashes. spec: shape ('circle'
+    -- radius, 'ring' radius + inner hole, 'cone' radius + arc in degrees, 'line'
+    -- length + width), x, y (center, or the start of a cone or line), angle in
+    -- degrees, duration (the cast, seconds). The engine draws it (EngineTelegraph,
+    -- returns an id); Reforged marks the area with Flame Strike art instead.
+    function G.telegraph(spec)
+        if Engine.active() and type(rawget(_G, 'EngineTelegraph')) == 'function' then
+            return EngineTelegraph(spec)
+        end
+        local a = math.rad(spec.angle or 0)
+        local ca, sa = math.cos(a), math.sin(a)
+        if spec.shape == 'line' then
+            local n = math.max(2, math.floor(spec.length / 160))
+            for i = 0, n - 1 do
+                local d = (i + 0.5) * spec.length / n
+                G.timedFx(FX.warning, spec.x + ca * d, spec.y + sa * d, spec.width / 150, spec.duration)
+            end
+        elseif spec.shape == 'cone' then
+            for _, f in ipairs({0.4, 0.75}) do
+                local d = spec.radius * f
+                G.timedFx(FX.warning, spec.x + ca * d, spec.y + sa * d,
+                    math.max(0.8, d * math.sin(math.rad(spec.arc / 2)) / 150), spec.duration)
+            end
+        elseif spec.shape == 'ring' then
+            local mid = (spec.radius + spec.inner) / 2
+            for i = 0, 7 do
+                G.timedFx(FX.warning, spec.x + mid * math.cos(i * math.pi / 4), spec.y + mid * math.sin(i * math.pi / 4),
+                    (spec.radius - spec.inner) / 300, spec.duration)
+            end
+        else
+            G.timedFx(FX.warning, spec.x, spec.y, spec.radius / 150, spec.duration)
+        end
+        return 0
+    end
+
+    -- Fades a telegraph out early, without its impact flash (the caster died).
+    function G.cancelTelegraph(id)
+        if id and id ~= 0 and type(rawget(_G, 'EngineTelegraphStop')) == 'function' then
+            EngineTelegraphStop(id, 0.25)
+        end
+    end
+
+    -- Whether a point lies inside a telegraph's shape, give or take the hero's size.
+    function G.inTelegraph(spec, px, py)
+        local pad = 24
+        local a = math.rad(spec.angle or 0)
+        local dx, dy = px - spec.x, py - spec.y
+        local fx, fy = dx * math.cos(a) + dy * math.sin(a), dy * math.cos(a) - dx * math.sin(a)
+        if spec.shape == 'line' then
+            return fx >= -pad and fx <= spec.length + pad and math.abs(fy) <= spec.width / 2 + pad
+        end
+        local d = math.sqrt(dx * dx + dy * dy)
+        if spec.shape == 'ring' then
+            return d <= spec.radius + pad and d >= spec.inner - pad
+        elseif spec.shape == 'cone' then
+            return d <= spec.radius + pad and (d < 2 * pad or math.abs(math.atan(fy, fx)) <= math.rad(spec.arc / 2) + pad / d)
+        end
+        return d <= spec.radius + pad
+    end
+
+    -- Boss spells, cast in turn every few seconds (G.updateEnemies). cast: the
+    -- telegraph's duration; dmg: times the boss's slam damage. Slam lands under
+    -- the hero; cleave is a cone from the boss toward the hero; charge is a line
+    -- the boss rushes along; nova is a ring around the boss whose middle is safe.
+    -- The boss stands still while it casts the aimed ones.
+    G.bossSpells = {
+        slam = {cast = 1.3, dmg = 1.0},
+        cleave = {cast = 1.6, dmg = 1.1, radius = 480, arc = 80},
+        charge = {cast = 1.4, dmg = 0.9, width = 170},
+        nova = {cast = 2.0, dmg = 1.0, radius = 560, inner = 200},
+    }
+    G.bossKits = {
+        boss = {'slam', 'cleave', 'slam', 'charge'},
+        final = {'slam', 'cleave', 'nova', 'charge'},
+    }
+
+    function G.bossCast(u, info)
+        local kit = info.final and G.bossKits.final or G.bossKits.boss
+        info.kitStep = math.fmod(info.kitStep or 0, #kit) + 1
+        local key = kit[info.kitStep]
+        local spell = G.bossSpells[key]
+        local bx, by = GetUnitX(u), GetUnitY(u)
+        local hx, hy = R.hx, R.hy
+        local facing = math.deg(math.atan(hy - by, hx - bx))
+        local spec
+        if key == 'cleave' then
+            spec = {shape = 'cone', x = bx, y = by, angle = facing, radius = spell.radius, arc = spell.arc}
+        elseif key == 'charge' then
+            local dist = math.sqrt((hx - bx) * (hx - bx) + (hy - by) * (hy - by))
+            spec = {shape = 'line', x = bx, y = by, angle = facing, length = math.min(dist + 250, 1000), width = spell.width}
+        elseif key == 'nova' then
+            spec = {shape = 'ring', x = bx, y = by, radius = spell.radius, inner = spell.inner}
+        else
+            spec = {shape = 'circle', x = hx, y = hy, radius = 240}
+        end
+        spec.duration = spell.cast
+        info.telegraph = G.telegraph(spec)
+        local rooted = key ~= 'slam'
+        if rooted then
+            info.casting = true
+            BlzSetUnitFacingEx(u, facing)
+            G.updateHeld(u, info)
+        end
         local run = R
-        G.after(1.2, function()
+        G.after(spell.cast, function()
             if R ~= run or R.enemies[u] == nil then
                 return
             end
-            G.fx(FX.warStomp, x, y, 1.4)
-            local dx, dy = R.hx - x, R.hy - y
-            if dx * dx + dy * dy <= 240 * 240 then
-                UnitDamageTarget(u, R.hero, info.slamDamage, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+            info.telegraph = nil
+            if rooted then
+                info.casting = false
+                G.updateHeld(u, info)
+            end
+            G.bossImpact(u, info, key, spec)
+            if spec.shape ~= 'line' and G.inTelegraph(spec, R.hx, R.hy) then
+                UnitDamageTarget(u, R.hero, info.slamDamage * spell.dmg, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
             end
         end)
+    end
+
+    -- The art of a boss spell's hit; a charge also moves the boss down its line
+    -- and hurts the hero if it is still in the way.
+    function G.bossImpact(u, info, key, spec)
+        local a = math.rad(spec.angle or 0)
+        if key == 'slam' then
+            G.fx(FX.warStomp, spec.x, spec.y, 1.4)
+        elseif key == 'cleave' then
+            SetUnitAnimation(u, 'attack slam')
+            for _, f in ipairs({0.35, 0.65, 0.9}) do
+                G.fx(FX.incinerate, spec.x + math.cos(a) * spec.radius * f, spec.y + math.sin(a) * spec.radius * f, 0.9)
+            end
+        elseif key == 'nova' then
+            SetUnitAnimation(u, 'spell slam')
+            for i = 0, 11 do
+                local r = (spec.radius + spec.inner) / 2
+                G.fx(FX.warStomp, spec.x + r * math.cos(i * math.pi / 6), spec.y + r * math.sin(i * math.pi / 6), 0.9)
+            end
+        elseif key == 'charge' then
+            local hit = G.inTelegraph(spec, R.hx, R.hy)
+            local steps = 6
+            local run = R
+            local stopped = false
+            for i = 1, steps do
+                G.after(0.05 * i, function()
+                    if R ~= run or R.enemies[u] == nil or stopped then
+                        return
+                    end
+                    -- The rush stops at a tree, a cliff or the map's edge.
+                    local d = spec.length * i / steps
+                    local x, y = spec.x + math.cos(a) * d, spec.y + math.sin(a) * d
+                    if not G.walkable(x, y) then
+                        stopped = true
+                        return
+                    end
+                    SetUnitPosition(u, x, y)
+                    G.fx(FX.stampede, x, y, 0.8)
+                end)
+            end
+            if hit then
+                UnitDamageTarget(u, R.hero, info.slamDamage * G.bossSpells.charge.dmg, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+            end
+        end
     end
 
     function G.onDeath()
@@ -2946,8 +3106,10 @@ do
         end
         R.enemies[u] = nil
         R.enemyCount = R.enemyCount - 1
-        if info.stunned then
-            BlzPauseUnitEx(u, false)
+        G.updateHeld(u, info)
+        if info.telegraph then
+            G.cancelTelegraph(info.telegraph)
+            info.telegraph = nil
         end
         if info.aura then
             DestroyEffect(info.aura)
@@ -4452,6 +4614,18 @@ do
                 if SPELLS[key] and R.spellByKey[key] == nil then
                     G.learnSpell(key, 1.0)
                 end
+            end
+            -- Test aid: +set survivor_boss 2 (a zone boss) or final brings it in 3 s after the start.
+            local bossAid = tostring(EngineCvar('survivor_boss') or '')
+            if bossAid ~= '' then
+                G.after(3, function()
+                    local index = tonumber(bossAid)
+                    if bossAid == 'final' then
+                        G.spawnBoss(R.zone.final, true)
+                    elseif index and R.zone.bosses[index] then
+                        G.spawnBoss(R.zone.bosses[index], false)
+                    end
+                end)
             end
         end
         SetWidgetLife(hero, BlzGetUnitMaxHP(hero))
