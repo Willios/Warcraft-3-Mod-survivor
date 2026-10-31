@@ -12,7 +12,7 @@ own Warcraft III install. The same script also runs as a custom map in Warcraft 
 ### [▶ Play in your browser](https://warcraftsurvivor.para-bellum.eu)
 
 Any recent Chromium browser on a computer (Chrome, Edge, Opera, Brave...). The first visit
-downloads about 1.2 GB of game data, once.
+downloads about 200 mo of game data, once.
 
 ![Archmage in Ashenvale](docs/screenshots/archmage.jpg)
 
