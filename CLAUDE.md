@@ -58,6 +58,9 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   back every time; harness `cdp_alttab.py` in the 2026-10-31 scratchpad). The client drops to the menu after 10 s
   without a server packet (`CL_TIMEOUT_MSEC`). The script prints `SURVIVOR hero position invalid` once if the
   hero's position turns non-finite (diagnostic only). Next report: ask for the F12 console log.
+  Same day, a Reddit tester (Edge): black world with the default Warcraft III UI showing. The hero's native chase of
+  ranged attackers (Plaguelands casters too) was fixed the same day (see Engine problems); whether it caused these
+  reports is unproven: ask testers again after 1.2.0.
 - Tester build: `powershell -ExecutionPolicy Bypass -File tools\release\make_release.ps1` writes
   `release\WarcraftSurvivors.exe` (7-Zip SFX, ~4 MB: engine + `src/` scripts + `Play Warcraft Survivors.bat`,
   which finds or asks for the tester's own 1.29 install and keeps it in `wc3path.txt`). No Blizzard data inside.
@@ -382,6 +385,23 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 
 ### Engine problems found (open or worked around)
 
+- **Fixed 2026-10-31, gameplay (Northrend "everything bugged"):** a hit made the hero counterattack natively
+  (`can_attack` in `skills/s_attack.c` ignored the script's `UnitRemoveAbility(hero, 'Aatk')`, which only auto-acquire
+  honoured). Against ranged attackers the hero walked off to chase them (native `attack_walk`, no order, no `Amov`), on
+  top of the scripted walk: double speed, Bladestorm's spin replaced by native walk/attack clips, the hero drifting
+  while idle. Northrend opens with ranged Ice Trolls, so it showed at once; every zone with ranged enemies had it.
+  Retaliation now skips a unit whose Attack was removed. `tools/engine_tests/test_zone_audit.lua` (add-on, any zone,
+  `audit_seconds`, `moveanim_clicks 0` = no scripted orders) logs slots, the hero's speed/animation/native order and
+  counts the script's own `SetUnitX` calls on the hero (`scriptMoves`): movement with `scriptMoves=0` is native.
+  The crash the user saw there was not reproduced (4 min Northrend after the fix, clean).
+- 2026-10-31: F1-F11 run none of their stock binds (hero select, `save quick`, stock game menu, quests, allies) when
+  `cl_fkeys` is 0 (`Key_Event` in `client/keys.c`; script key events still get them). The script sets it in `G.boot`.
+- 2026-10-31: icon: `python tools/make_icon.py <FRIZQT__.TTF> tools/release/warcraft_survivors.ico [preview] [icons dir]`
+  (gold "WS"). The launcher compiles with `/win32icon` (`make_portable.ps1`); the engine exe embeds a copy,
+  `engine/port/windows/openwarcraft3.ico` (`openwarcraft3.rc`, windres rule in `games/warcraft-3/game.mk`), which SDL
+  uses for the window and taskbar; the web survivor shell uses `port/web/site/icons/survivor-180/192.png`.
+  The 7-Zip SFX tester exe (`make_release.ps1`) keeps the SFX module's icon.
+
 - **Fixed 2026-10-29, art:** `DestroyEffect` freed an effect at once when its model had no Death
   sequence, so caster art made and destroyed in one call (Thunder Clap, War Stomp, Mirror Image: one
   one-shot Birth/Stand only) never showed. It now finishes the playing one-shot first (`G_DestroyEffect`
@@ -502,6 +522,9 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-10-31:** During the Northrend audit a Python patch with `\037` went through a Bash heredoc again (sixth time);
+  its assert caught it and nothing was written. Lesson unchanged: anything with `\` goes through the Edit tool.
 
 - **2026-10-31:** Telegraph work: a Python patch passed through a Bash heredoc turned `\n` inside C strings into real
   newlines and broke the engine build (fifth time for this lesson), and a later heredoc silently missed a `\037`

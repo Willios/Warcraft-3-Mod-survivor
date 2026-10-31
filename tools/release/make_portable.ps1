@@ -62,7 +62,9 @@ Get-ChildItem -LiteralPath (Join-Path $trim 'data') -Force |
 Remove-Item -LiteralPath $trim -Recurse -Force
 
 $launcher = Join-Path $stage 'WarcraftSurvivors.exe'
+# The icon comes from tools/make_icon.py (the engine exe carries the same one).
 & $csc /nologo /target:winexe /optimize+ /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll `
+    "/win32icon:$(Join-Path $PSScriptRoot 'warcraft_survivors.ico')" `
     "/out:$launcher" (Join-Path $PSScriptRoot 'warcraft_survivors_launcher.cs')
 if ($LASTEXITCODE -ne 0) {
     throw "Launcher compilation failed with exit code $LASTEXITCODE"

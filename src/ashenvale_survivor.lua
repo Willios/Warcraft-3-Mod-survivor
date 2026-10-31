@@ -7948,6 +7948,11 @@ do
         end
         EnableSelect(false, false)
         ClearTextMessages()
+        -- Standalone engine: F1-F11 keep none of their melee binds (hero
+        -- select, quick save, the stock game menu, quests, allies).
+        if Engine.active() then
+            EngineCvar('cl_fkeys', '0')
+        end
 
         Hud.build()
         Cards.build()

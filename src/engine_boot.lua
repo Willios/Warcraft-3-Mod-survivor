@@ -22,8 +22,8 @@ SURVIVOR_ENGINE = {
     -- copies both into the portable build's version.json; the portable launcher
     -- compares it with the one under update (the uploaded release) and the
     -- lobby offers the newer one (Updater). Raise the version for every release.
-    version = '1.1.0',
-    notes = 'Bosses now warn before they strike: their slams, cleaves, novas and charges are drawn on the ground and fill up until they hit. Get out of the marked area in time. Bosses stand still while they cast.',
+    version = '1.2.0',
+    notes = 'Your hero no longer fights back on its own when hit: it used to chase ranged enemies (Northrend\'s ice trolls, Plaguelands casters), which made it run too fast and cut Bladestorm short. F1 to F11 no longer open Warcraft III menus or save the game. Warcraft Survivors has its own icon.',
     update = 'https://warcraftsurvivor.para-bellum.eu/download/portable/',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art
