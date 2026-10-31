@@ -49,9 +49,32 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   native runs (walking Lich 5:30, Dreadlord with Inferno; memory flat ~630-670 MB) nor headless Chrome with the
   add-on embedded (`--out build/web/survivor-test`, Lich 7:40, Dreadlord 3:35 with audio unlocked; wasm 442-531 MB).
   Suspect: Opera GX's GX Control RAM/CPU limiter. Every zone track exists (some only in `War3Local.mpq`).
+  2026-10-31: more reports (Reddit: black world after 5+ min "still getting gold but no xp", kicked to the menu;
+  GitHub: page freeze during Stitches 4-5 times out of 5; the user: black world at 7:19 in Opera GX after many
+  Alt+Tabs, HUD and timer still drawn, and GX Control's Hot Tabs Killer listing the game tab at 67 CPU). Ruled out:
+  map-change leaks (10 native menu<->Plaguelands cycles flat at 630-700 MB; 6 web cycles flat at 442 MB wasm,
+  `test_zone_cycle.lua`), a killed Stitches natively not reproduced (heroes did not kill it, `uabo=1` stayed), and
+  Chrome visibility (30 minimize / tab switch / page freeze / resize disturbances on the real GPU over 9 min, world
+  back every time; harness `cdp_alttab.py` in the 2026-10-31 scratchpad). The client drops to the menu after 10 s
+  without a server packet (`CL_TIMEOUT_MSEC`). The script prints `SURVIVOR hero position invalid` once if the
+  hero's position turns non-finite (diagnostic only). Next report: ask for the F12 console log.
 - Tester build: `powershell -ExecutionPolicy Bypass -File tools\release\make_release.ps1` writes
   `release\WarcraftSurvivors.exe` (7-Zip SFX, ~4 MB: engine + `src/` scripts + `Play Warcraft Survivors.bat`,
   which finds or asks for the tester's own 1.29 install and keeps it in `wc3path.txt`). No Blizzard data inside.
+- Portable build (since 2026-10-31): `powershell -ExecutionPolicy Bypass -File tools\release\make_portable.ps1`
+  writes `release\Warcraft Survivors Portable\` (launcher exe, `OpenRealm\` engine + scripts, `Data\`). `Data\` holds
+  only the web build's trimmed archives and the 12 arena maps (`make_survivor_data.py` run into a temporary folder,
+  ~200 MB instead of the whole 1.5 GB install); the engine mounts them natively the same way. An existing portable
+  folder is moved to `.previous-<stamp>` first. `release\Warcraft Survivors Portable\` is the user's own copy (never
+  rebuild over it unasked); the shared one is `-Name 'Warcraft Survivors'` (`release\Warcraft Survivors\`). Neither
+  holds a save: progress is `%APPDATA%\...\profile.pld` per PC, so a friend starts blank (Ashenvale only); the user's
+  portable shows every zone because it shares the dev profile. Run with `APPDATA=<empty dir>` to see a blank start.
+  The script also writes `release\WarcraftSurvivors.zip` (from the folder just built), which the browser
+  lobby's **Download for Windows** button (top right, `Engine.web()` only) fetches from
+  `SURVIVOR_ENGINE.download` (`/download/WarcraftSurvivors.zip`); stage it with
+  `stage_survivor_upload.py ... --download ../release/WarcraftSurvivors.zip`. The button calls `EngineOpenURL(url)`
+  (engine-only native, `MenuAction("openurl")` -> `CL_OpenURL` in `cl_main.c`: a temporary `<a download>` on the page,
+  `SDL_OpenURL` natively).
 - Quick rebuild without the broken packaging step: from MSYS2 UCRT64 in `engine/`,
   `make -j8 OS=Windows_NT BIN_DIR=build-windows/bin LIB_DIR=build-windows/lib openwarcraft3`, then copy
   `build-windows\bin\openwarcraft3.exe` and `build-windows\lib\*.dll` into `dist\windows\`.
@@ -101,9 +124,17 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   adds numbered sound variants, every zone playlist and every asset path written in the script. Music is 89 MB.
   `run --only icons enter01 ...` reruns single sessions; `reads` takes any number of trace dirs. **Rerun it after adding
   heroes, spells, enemies, zones or UI art**, or the browser build misses those files (invisible model, silence).
-  Later additions could ship as an extra archive sorted after `War3xLocal.mpq` (the engine mounts every `.mpq`
-  in the data folder by name, later wins), so players would not re-download the big four: not built yet.
+  **Small updates (since 2026-10-30):** the four archives are trimmed to the frozen `tools/web_base_reads.txt` (the
+  list first published), so they stay byte for byte the same; files the reads list gains go into
+  `War3zUpdate<n>.mpq` (n = source archive index; the engine mounts every `.mpq` by name, later wins). Players
+  then download only those (tested: 3 added files = 1.5 MB, the 199 MB copied locally). A name added to a lower
+  archive that a higher base archive also has is repeated in the higher update archive, so priority holds.
+  Never edit `web_base_reads.txt` casually: copying the reads list over it folds the updates in and makes every
+  player download the 199 MB again (worth it only once the update archives get big).
   Rerun `stage_survivor_upload.py` afterwards: the upload folder shares `files.json` with the build through a hard link.
+- Script-only changes re-download just `index.wasm` (8.5 MB, 4.8 MB gzipped: `survivor.htaccess` enables
+  `mod_deflate` for wasm/js/html/json; check `curl -sI -H "Accept-Encoding: gzip" .../index.wasm` shows
+  `Content-Encoding: gzip` after uploading the new `.htaccess`).
 - Upload: `python port/web/stage_survivor_upload.py build/web/survivor build/web/survivor-upload` writes
   only the served files + `.htaccess` (`port/web/site/survivor.htaccess`: isolation headers, wasm type,
   HTTPS redirect) + `data/`. The user uploads its contents with WinSCP to OVH shared hosting, multisite
@@ -281,6 +312,9 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 - Test aid: `+set survivor_autopick 1` (engine) picks the first card of every hand after 0.3 s. Use it for any
   unattended run longer than a minute: `pickcards.cfg` presses are frame-counted and run out within seconds
   when `com_maxfps_background 0` lets a hidden window render hundreds of frames per second.
+- `tools/engine_tests/test_zone_cycle.lua` (add-on, start on the menu map): `+set zone_cycle <n> +set zone_cycle_run
+  "5 4 1 2"` goes menu -> zone (20 s, hero healed) -> menu n times, like Enter Zone / Return to Camp in a long session,
+  for memory measurements across map loads. Logs `CYCLE` lines.
 - `tools/engine_tests/test_plague.lua` (add-on): keeps the hero alive, logs `PLAGUE` lines (enemy count by
   type every 5 s) and, unless `plague_units "zzzz"`, spawns the Plaguelands casters next to the hero every 10 s.
 - Web: the engine checks `emscripten_is_webgl_context_lost` about once a second (`R_WebCheckContextLost` in
@@ -421,6 +455,11 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-10-31:** `make_portable.ps1` failed halfway: Claude's Bash shell had `cd`'d into
+  `release\Warcraft Survivors Portable\OpenRealm` to list it, which locked the folder, so `Move-Item` copied
+  everything to the `.previous-*` backup but could not delete the original (empty folders left behind).
+  Lesson: inspect folders with absolute paths, never `cd` into a folder a script is about to move or delete.
 
 - **2026-10-30:** The first trace-trimmed web data shipped without 11 hero icons (Keeper, Priestess, Warden, every
   Tavern hero) and without the zones' loading-screen art: the trace opened the lobby on one faction and started

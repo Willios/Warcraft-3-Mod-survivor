@@ -15,6 +15,9 @@
 -- (tools/engine_tests/test_arena_probe.lua rates a map).
 SURVIVOR_ENGINE = {
     menu = 'Maps\\FrozenThrone\\(6)Moonglade.w3x',
+    -- The browser lobby's Download button: the portable Windows build
+    -- (tools/release/make_portable.ps1, zipped), uploaded beside the page.
+    download = 'https://warcraftsurvivor.para-bellum.eu/download/WarcraftSurvivors.zip',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art
         [2] = {map = 'Maps\\FrozenThrone\\(2)TerenasStand.w3x', loading = 2}, -- Westfall: Village tileset (farms), Lordaeron art

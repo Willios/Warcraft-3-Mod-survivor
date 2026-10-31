@@ -1,5 +1,8 @@
 param(
-    [string]$WarcraftDataDir = 'C:\Program Files (x86)\Warcraft III (Legacy)'
+    [string]$WarcraftDataDir = 'C:\Program Files (x86)\Warcraft III (Legacy)',
+    # Folder under release\ (an existing one is moved aside to .previous-<stamp>).
+    # The shared zip is built with -Name 'Warcraft Survivors'.
+    [string]$Name = 'Warcraft Survivors Portable'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -7,8 +10,8 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot)
 $dist = Join-Path $root 'engine\dist\windows'
 $out = Join-Path $root 'release'
-$destination = Join-Path $out 'Warcraft Survivors Portable'
-$stage = Join-Path $out 'Warcraft Survivors Portable.stage'
+$destination = Join-Path $out $Name
+$stage = Join-Path $out "$Name.stage"
 $runtime = Join-Path $stage 'OpenRealm'
 $data = Join-Path $stage 'Data'
 $csc = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
@@ -43,9 +46,20 @@ Remove-Item (Join-Path $runtime 'share\warcraft-3\Maps\WarcraftSurvivor.w3m') -E
 Copy-Item (Join-Path $root 'src\ashenvale_survivor.lua'), (Join-Path $root 'src\engine_boot.lua') `
     (Join-Path $runtime 'share\warcraft-3\Scripts\Survivor')
 
-# Keep the complete Legacy install under Data so the launcher can use it offline.
-Get-ChildItem -LiteralPath $WarcraftDataDir -Force |
+# Only the Blizzard files the game reads: the four archives trimmed to the web build's
+# reads list (tools/web_trace_reads.txt, plus War3zUpdate*.mpq) and the arena maps.
+# The engine mounts them from Data the same way the browser does (~200 MB, not 1.5 GB).
+$trim = Join-Path $out "$Name.trim"
+if (Test-Path -LiteralPath $trim) { Remove-Item -LiteralPath $trim -Recurse -Force }
+& python (Join-Path $root 'engine\port\web\make_survivor_data.py') $WarcraftDataDir $trim
+if ($LASTEXITCODE -ne 0) {
+    throw "Trimming the Warcraft III data failed with exit code $LASTEXITCODE"
+}
+# Real copies: the script hard-links the maps from the install.
+Get-ChildItem -LiteralPath (Join-Path $trim 'data') -Force |
+    Where-Object Name -ne 'files.json' |
     Copy-Item -Destination $data -Recurse -Force
+Remove-Item -LiteralPath $trim -Recurse -Force
 
 $launcher = Join-Path $stage 'WarcraftSurvivors.exe'
 & $csc /nologo /target:winexe /optimize+ /reference:System.Windows.Forms.dll `
@@ -59,11 +73,11 @@ Warcraft Survivors - portable build
 ===================================
 
 Double-click WarcraftSurvivors.exe to start the game. Keep the Data and OpenRealm
-folders beside it. Data contains the Warcraft III Legacy files; OpenRealm contains
-the modified OpenRealm engine, its configuration, and the survivor scripts.
+folders beside it. Data contains the Warcraft III 1.29 files the game reads
+(trimmed archives and the arena maps); OpenRealm contains the modified OpenRealm
+engine, its configuration, and the survivor scripts.
 
-This package includes Blizzard game data copied from the builder's local install.
-Keep it for your personal use and do not upload or share it.
+This package includes Blizzard game data taken from the builder's local install.
 
 Progress is saved in %APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'README.txt') -Encoding UTF8
@@ -71,9 +85,9 @@ Progress is saved in %APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\.
 $backup = $null
 if (Test-Path -LiteralPath $destination) {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $backup = Join-Path $out "Warcraft Survivors Portable.previous-$stamp"
+    $backup = Join-Path $out "$Name.previous-$stamp"
     if (Test-Path -LiteralPath $backup) {
-        $backup = Join-Path $out "Warcraft Survivors Portable.previous-$stamp-$([guid]::NewGuid().ToString('N'))"
+        $backup = Join-Path $out "$Name.previous-$stamp-$([guid]::NewGuid().ToString('N'))"
     }
     Move-Item -LiteralPath $destination -Destination $backup
 }
@@ -87,5 +101,17 @@ try {
     throw
 }
 
+# The browser lobby's Download button serves this zip (stage_survivor_upload.py --download).
+$zip = Join-Path $out 'WarcraftSurvivors.zip'
+if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip }
+$sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+if (Test-Path -LiteralPath $sevenZip) {
+    & $sevenZip a -tzip -mx=9 $zip $destination | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "7z failed ($LASTEXITCODE)" }
+} else {
+    Compress-Archive -LiteralPath $destination -DestinationPath $zip
+}
+
 "Portable folder created: $destination"
+"Zip: {0} ({1:N0} MB)" -f $zip, ((Get-Item $zip).Length / 1MB)
 if ($backup) { "Previous build preserved at: $backup" }

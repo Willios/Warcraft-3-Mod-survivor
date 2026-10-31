@@ -4263,6 +4263,13 @@ do
         local dt = CFG.TICK
         R.time = R.time + dt
         R.hx, R.hy = GetUnitX(R.hero), GetUnitY(R.hero)
+        -- Diagnostic for the browser black-world reports: a non-finite hero
+        -- position would blank the camera and stop every pickup. Logged once.
+        if not R.badPos and (R.hx ~= R.hx or R.hy ~= R.hy or math.abs(R.hx) > 1e7 or math.abs(R.hy) > 1e7) then
+            R.badPos = true
+            print('SURVIVOR hero position invalid at ' .. string.format('\0371.1f', R.time) .. ' s: '
+                .. tostring(R.hx) .. ' ' .. tostring(R.hy))
+        end
         if GetWidgetLife(R.hero) <= 0.405 then
             G.endRun(false)
             return
@@ -6294,7 +6301,17 @@ do
         else
             Lobby.title = UI.text(root, U.col(GOLD, 'WARCRAFT SURVIVORS'), LAY.x0, 0.598, LAY.w, 0.032, 0.024, TEXT_JUSTIFY_CENTER)
         end
-        Lobby.gold = UI.text(root, '', LAY.x1 - 0.3, 0.594, 0.3, 0.014, 0.0085, TEXT_JUSTIFY_RIGHT)
+        -- Browser only: a download of the Windows build, top right; the
+        -- rating moves to its left.
+        local download = Engine.web() and SURVIVOR_ENGINE.download
+        local goldRight = LAY.x1
+        if download and rawget(_G, 'EngineOpenURL') then
+            goldRight = LAY.x1 - 0.122
+            UI.button(root, goldRight + 0.008, 0.596, 0.114, 0.024, U.col(GOLD, 'Download for Windows'), function()
+                EngineOpenURL(download)
+            end, 'dark', 0.0088)
+        end
+        Lobby.gold = UI.text(root, '', goldRight - 0.3, 0.594, 0.3, 0.014, 0.0085, TEXT_JUSTIFY_RIGHT)
         UI.button(root, LAY.x0, 0.596, 0.1, 0.024, 'Options  ' .. U.col(GREY, '[Esc]'), function()
             Options.show()
         end, 'dark', 0.0088)
