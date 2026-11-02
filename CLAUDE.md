@@ -61,6 +61,13 @@ survivor game (exe + web) built on it, using the Legacy 1.29 TFT data.
   Same day, a Reddit tester (Edge): black world with the default Warcraft III UI showing. The hero's native chase of
   ranged attackers (Plaguelands casters too) was fixed the same day (see Engine problems); whether it caused these
   reports is unproven: ask testers again after 1.2.0.
+  **Cause found 2026-11-01 (by Fastje, a Reddit tester who forked the repo), fixed in 1.3.1:** a Lua `StartSound`
+  runs with `currentplayer` set, so it goes out `CHAN_OWNER` to the player's edict, which is slot 0; with a position
+  the server still wrote `SND_ENT` with entity 0, and `CL_ParseSound` rejected it and returned **before reading the
+  `SND_POS` bytes**, so the rest of the message parsed as garbage (desync, then `CL_TIMEOUT_MSEC` -> menu). Hit by
+  every `G.sound` (Blizzard and Rain of Fire waves, `def.sound` casts). Now `SV_StartSoundPolicy` never sends entity 0
+  and the client consumes the position before rejecting an entity (`sv_send.c`, `cl_parse.c`). Fastje also added an
+  English archive for French-locale unit names (not in this repository).
 - **Release procedure (the user's rule, 2026-11-01: every time).** After raising `version`/`notes` in
   `src/engine_boot.lua`, run `powershell -ExecutionPolicy Bypass -File tools\release\make_upload.ps1`
   (`-SkipNative`/`-SkipWeb`/`-SkipPortable` for steps already done). It builds the native and browser engines, the
@@ -385,6 +392,13 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
     under the cursor every `cl_smart_hold_ms` (100) and at the press (`CL_SmartHoldFrame` in `client/cl_input.c`,
     ground only, never over the HUD). Test command `cursor <x> <y>` pushes a real mouse motion (hidden windows keep
     the cursor at 0,0, over the hero frame); `+smart`/`-smart` in a cfg hold and release.
+    Since 2026-11-01 only the press is a `smartpoint`; the held points are `smarthold X Y` (`CMD_SmartHold` in
+    `g_commands.c`: a smart point order for `UNIT_FLAG_SCRIPT_ORDERS` units only, no move marker, waypoint or order
+    voice), sent only when the point moved 8+ units, and the release after a hold sends nothing (a quick click still
+    sends its `smart` on release). Before, every tick was a full right-click (marker + voice ten times a second).
+    Moving is the right button only (the user's rule: Warcraft moves with right-click, never left).
+    Real-input test: `python tools/engine_flow.py <name> w240 "ccursor 1100 360" c+smart w90 ... c-smart`
+    (`c<command>` = any console command) with `test_moveanim.lua` and `moveanim_clicks 0`.
   - **Touch** (browser): `cl_touch_smart 1` (script) makes a single finger on the world a held right button (the HUD
     and menus keep the left click). `survivor.js` sets `survivor_touch 1` on a coarse-pointer touch device; the
     script then forces mouse movement, shows a touch footer and a HUD Menu button (no Escape key on a phone).
@@ -445,6 +459,19 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
   uses for the window and taskbar; the web survivor shell uses `port/web/site/icons/survivor-180/192.png`.
   The 7-Zip SFX tester exe (`make_release.ps1`) keeps the SFX module's icon.
 
+- **Fixed 2026-11-01, UI:** world labels (text tags) draw a black drop shadow 3 px right of the text, but an inline
+  `|c` colour code tinted the shadow too, so a coloured label read as two copies (chest prices). The shadow pass
+  passes `DRAW_FLAT_COLOR` (`r_font.c` skips `|c` codes); the script's price tags use `SetTextTagColor` anyway.
+- 2026-11-01: the update window sizes itself to its notes (`UI.textLines` estimates wrapped lines at 0.55 x font
+  size per character, `Updater.layout`); checked with a fake `info.pld` (token = `survivor_updater`) in the
+  `Update\` folder and ~800 characters of notes.
+  **Fixed 2026-11-02, not yet seen in game:** the update window's text overlapped the size line, buttons and window
+  bottom with long notes (~700 characters). Cause: `UI.textLines` used 0.55 x font size per character, too narrow,
+  and `Updater.notesHeight` gave the notes too little height. Now 0.62 per character, and the height is (lines + 1)
+  x 1.5 font sizes. Still an estimate (no text measuring in 1.29); a 700-character note now gives ~13 lines and
+  a 0.18 notes box. The window is 0.40 wide (was 0.36, 2026-11-02, centred on the same x). Notes beyond what it can hold (about 1630 characters) are cut at a word with " ..."
+  (`Updater.fitNotes`), so the text cannot run past the box. Check with a long note: if it still runs over, lower the
+  85 percent budget in `Updater.fitNotes` or widen the character estimate, not the buttons.
 - **Fixed 2026-10-29, art:** `DestroyEffect` freed an effect at once when its model had no Death
   sequence, so caster art made and destroyed in one call (Thunder Clap, War Stomp, Mirror Image: one
   one-shot Birth/Stand only) never showed. It now finishes the playing one-shot first (`G_DestroyEffect`
@@ -565,6 +592,25 @@ The same Lua file as the Reforged map, unchanged. Engine-side pieces (all on bra
 ## Mistakes log
 
 Every mistake Claude makes in this project is recorded here, with the lesson.
+
+- **2026-11-01:** A hidden engine test started with PowerShell `Start-Process -ArgumentList @(...)` split
+  `-data "C:\Program Files (x86)\..."` at the space; the engine found no data and the 75 s run tested nothing (caught
+  because the log had no `PLAGUE` lines). Lesson: pass `Start-Process` one argument string with the quotes written
+  in, and check the log shows progress before reading a "no errors" result.
+- **2026-11-02:** Twitch button: the first `make_upload.ps1` run went through the Bash tool as
+  `tools\\release\\make_upload.ps1`; PowerShell got the path without separators, built nothing and the tool still
+  reported exit 0. Then the rating line was moved "under the title" with a guessed y, taken as the bottom edge;
+  `UI.text`'s y is the **top** edge, so it drew over the title (caught on a lobby screenshot). Lesson: run
+  PowerShell scripts with the PowerShell tool and read the output, not the exit code; check `UI.place` (y = top)
+  and take one lobby screenshot (`+set survivor_tab codex` + `+screenshot 900`) for any lobby layout change.
+  Each screenshot run then took 2.5 minutes: the engine keeps running after `+screenshot`, and the run only waited
+  for its 150 s timeout (the user stopped it twice). Lesson: poll for the new `shotNNNN.jpg` and kill the engine as
+  soon as it appears (about 20 s).
+- **2026-11-01:** Asked for "holding the left click" to move, Claude built a left-button move option before checking
+  it against how Warcraft moves; the user meant the right button (the hold-to-move spam) and the option was removed
+  the same session. A hand-written test cfg also used `wait 600`: Quake's `wait` ignores its argument (one frame),
+  so the whole cfg ran during the map load. Lesson: when a request contradicts the game's own controls, ask before
+  building; write timed input with `tools/engine_flow.py` (one `wait` per frame).
 
 - **2026-11-01:** The first `web_trace.py reads --add` merged the new traces into the list but counted only their
   names as known, so ~70 script paths already listed per archive came back as duplicate `*` lines (caught in the

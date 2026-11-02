@@ -18,12 +18,14 @@ SURVIVOR_ENGINE = {
     -- The browser lobby's Download button: the portable Windows build
     -- (tools/release/make_portable.ps1, zipped), uploaded beside the page.
     download = 'https://warcraftsurvivor.para-bellum.eu/download/WarcraftSurvivors.zip',
+    -- The lobby's Twitch button (browser and Windows build): the channel.
+    twitch = 'https://www.twitch.tv/williosz',
     -- This build's version and what is new in it. tools/release/portable_manifest.py
     -- copies both into the portable build's version.json; the portable launcher
     -- compares it with the one under update (the uploaded release) and the
     -- lobby offers the newer one (Updater). Raise the version for every release.
-    version = '1.3.0',
-    notes = 'New Tavern hero: Medivh, the Last Guardian (Arcane Barrage, Raven Form, Enchanted Crows, Dark Portal). Chests, shrines and treasure now lie in every zone: walk up to one to use it. Hold the right mouse button and your hero follows the cursor; on a phone or tablet, hold a finger on the ground. Enemies block your way as in Warcraft III. Blood splashes when you are hit. Transmute gives less gold.',
+    version = '1.3.5',
+    notes = 'Carrion Swarm deals 30 percent less damage. Devotion Aura armor, the movement and attack speed of Endurance Aura and the dodge of Evasion now grow much more slowly with rank and rarity. The left mouse button works like the right one: click the ground to walk there, or hold it and the hero follows the cursor. The Twitch button in the top right of the lobby is as wide as its name and opens the channel in a new tab.',
     update = 'https://warcraftsurvivor.para-bellum.eu/download/portable/',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art

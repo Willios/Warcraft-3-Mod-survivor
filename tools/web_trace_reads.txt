@@ -13,6 +13,7 @@
 *	Doodads\Outland\Props\Standard\Standard0.mdx
 *	Objects\Spawnmodels\Orc\Orcblood\HeroShadowHunterBlood.mdx
 *	Objects\Spawnmodels\Undead\UndeadBlood\UndeadBloodCryptFiend.mdx
+*	Sound\Interface\PickUpItem.wav
 *	Sound\Music\mp3Music\ArthasTheme.mp3
 *	Sound\Music\mp3Music\BloodElfTheme.mp3
 *	Sound\Music\mp3Music\Comradeship.mp3

@@ -9,6 +9,8 @@ Usage: python tools/engine_flow.py <name> <steps...>
          k<code>     press and release a key (OS key code, e.g. k27 = Escape)
          d<code>     key down,  u<code> key up
          s           screenshot
+         c<command>  any console command, e.g. "ccursor 900 360", c+smart, c-smart
+                     (hold and release the right mouse button at the cursor)
 Writes engine/dist/windows/share/warcraft-3/<name>.cfg (+ <name>_N.cfg parts);
 start it with +exec <name>.cfg.
 """
@@ -36,6 +38,8 @@ def lines_for(steps):
             yield 'oskey %s 0 0' % arg
         elif kind == 's':
             yield 'screenshot'
+        elif kind == 'c':
+            yield arg
         else:
             raise SystemExit('unknown step ' + step)
 

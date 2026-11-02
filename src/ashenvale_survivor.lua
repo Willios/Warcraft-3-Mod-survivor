@@ -186,10 +186,10 @@ do
     -- WoW item-quality colours, used for card rarities and zone tiers.
     local RARITY = {
         {key = 'common', name = 'Common', hex = 'e6e6e6', rgb = {230, 230, 230}, bonus = 0.0, weight = 56},
-        {key = 'uncommon', name = 'Uncommon', hex = '1eff00', rgb = {30, 255, 0}, bonus = 0.15, weight = 27},
-        {key = 'rare', name = 'Rare', hex = '0070dd', rgb = {40, 130, 255}, bonus = 0.30, weight = 12},
-        {key = 'epic', name = 'Epic', hex = 'a335ee', rgb = {163, 53, 238}, bonus = 0.50, weight = 4.2},
-        {key = 'legendary', name = 'Legendary', hex = 'ff8000', rgb = {255, 128, 0}, bonus = 0.80, weight = 0.8}
+        {key = 'uncommon', name = 'Uncommon', hex = '1eff00', rgb = {30, 255, 0}, bonus = 0.25, weight = 27},
+        {key = 'rare', name = 'Rare', hex = '0070dd', rgb = {40, 130, 255}, bonus = 0.50, weight = 12},
+        {key = 'epic', name = 'Epic', hex = 'a335ee', rgb = {163, 53, 238}, bonus = 0.75, weight = 4.2},
+        {key = 'legendary', name = 'Legendary', hex = 'ff8000', rgb = {255, 128, 0}, bonus = 1.00, weight = 0.8}
     }
 
     local GOLD = 'ffd27a'
@@ -335,7 +335,7 @@ do
     --   buff     temporary stat boost when enemies are close or health is low
     --   passive  permanent stat boost
     -- Values grow with rank, without limit (only the extra lives stop at 1);
-    -- rarity adds power when the card is picked.
+    -- rarity adds power when the card is picked (spells and blessings alike).
     -- Summons last as long as their cooldown, so one wave is out at a time;
     -- spell duration (Persistence) keeps them longer and they pile up.
     ---------------------------------------------------------------------------
@@ -408,7 +408,7 @@ do
     spell('war_stomp', {name = 'War Stomp', code = 'AOws', icon = 'BTNWarStomp', kind = 'nova', cd = 6.0, dmg = 40,
         radius = 280, fx = FX.warStomp, stun = 1.2,
         desc = 'Stomps for {dmg} damage within {radius}, stunning enemies for {stun} sec.'})
-    spell('devotion_aura', {flat = true, name = 'Devotion Aura', code = 'AHad', icon = 'BTNDevotion', kind = 'aura', per = 2,
+    spell('devotion_aura', {flat = true, name = 'Devotion Aura', code = 'AHad', icon = 'BTNDevotion', kind = 'aura', per = 1,
         interval = 1.0, dmg = 11, radius = 240, fx = FX.holyLight, attach = 'Abilities\\Spells\\Human\\DevotionAura\\DevotionAura.mdl',
         apply = function(s, v) s.armor = s.armor + v.amount end,
         desc = 'Holy light burns enemies within {radius} for {dmg} damage every second. Grants {pct} armor.'})
@@ -457,7 +457,7 @@ do
     spell('mirror_image', {name = 'Mirror Image', code = 'AOmi', icon = 'BTNMirrorImage', kind = 'nova', cd = 6.0, dmg = 50,
         radius = 260, fx = FX.mirrorImage, images = true,
         desc = 'Splits into images that slash every enemy within {radius} for {dmg} damage.'})
-    spell('endurance_aura', {name = 'Endurance Aura', code = 'AOae', icon = 'BTNCommand', kind = 'aura', per = 0.05,
+    spell('endurance_aura', {name = 'Endurance Aura', code = 'AOae', icon = 'BTNCommand', kind = 'aura', per = 0.015,
         interval = 1.0, dmg = 12, radius = 240, fx = FX.cleave,
         apply = function(s, v) s.move = s.move + v.amount; s.attackSpeed = s.attackSpeed + v.amount end,
         desc = 'Nearby enemies within {radius} take {dmg} damage every second. +{pct}\037 movement and attack speed.'})
@@ -468,7 +468,7 @@ do
     spell('shockwave', {name = 'Shockwave', code = 'AOsh', icon = 'BTNShockWave', kind = 'line', cd = 3.5, dmg = 55,
         count = 1, countEvery = 2, range = 900, width = 130, speed = 1050, missile = FX.shockwave,
         desc = 'Sends {count} shockwave through enemies in a line for {dmg} damage.'})
-    spell('evasion', {name = 'Evasion', code = 'AEev', icon = 'BTNEvasion', kind = 'passive', per = 0.05,
+    spell('evasion', {name = 'Evasion', code = 'AEev', icon = 'BTNEvasion', kind = 'passive', per = 0.015,
         apply = function(s, v) s.dodge = s.dodge + v.amount end, desc = '{pct}\037 chance to dodge attacks.'})
     spell('feral_spirit', {name = 'Feral Spirit', code = 'AOsf', icon = 'BTNSpiritWolf', kind = 'summon', cd = 15.0, 
         count = 2, countEvery = 2, units = {'osw1', 'osw1', 'osw2', 'osw2', 'osw3'}, dmg = 18, hp = 300, birth = FX.feralSpirit,
@@ -530,7 +530,7 @@ do
         interval = 1.0, dmg = 12, radius = 240, fx = FX.vampiric,
         apply = function(s, v) s.lifesteal = s.lifesteal + v.amount end,
         desc = 'Drains enemies within {radius} for {dmg} damage every second. Heals for {pct}\037 of all damage dealt.'})
-    spell('carrion_swarm', {name = 'Carrion Swarm', code = 'AUcs', icon = 'BTNCarrionSwarm', kind = 'line', cd = 3.2, dmg = 52,
+    spell('carrion_swarm', {name = 'Carrion Swarm', code = 'AUcs', icon = 'BTNCarrionSwarm', kind = 'line', cd = 3.2, dmg = 36,
         count = 1, countEvery = 2, range = 850, width = 150, speed = 950, missile = FX.carrionSwarm,
         desc = 'Unleashes {count} swarm of bats through a line of enemies for {dmg} damage.'})
     spell('sleep', {name = 'Sleep', code = 'AUsl', icon = 'BTNSleep', kind = 'nova', cd = 9.0, dmg = 20, radius = 300,
@@ -1780,6 +1780,28 @@ do
         BlzFrameSetSize(frame, w, h)
     end
 
+    -- Lines a text takes once wrapped at width w: neither the engine nor 1.29
+    -- can measure a text frame, so words are laid out at about 0.62 of the
+    -- font size per character (wider than Friz Quadrata's average, so long
+    -- patch notes get a little spare room rather than running past their box).
+    function UI.textLines(s, w, size)
+        local perLine = math.max(1, math.floor(w / (size * 0.62)))
+        local lines = 0
+        for para in (U.strip(s) .. '\n'):gmatch('(.-)\n') do
+            local n, len = 1, 0
+            for word in para:gmatch('\037S+') do
+                local wl = string.len(word)
+                if len > 0 and len + 1 + wl > perLine then
+                    n, len = n + 1, wl
+                else
+                    len = len + (len > 0 and 1 or 0) + wl
+                end
+            end
+            lines = lines + n
+        end
+        return lines
+    end
+
     function UI.group(parent)
         local frame = BlzCreateFrameByType('FRAME', UI.name(), parent or UI.game, '', 0)
         UI.place(frame, 0.0, 0.6, 0.8, 0.6)
@@ -2035,6 +2057,17 @@ do
         o.edge = UI.box(parent, x - h * 0.35, top + h * 0.3, w + h * 0.7, h * 1.6, 255, 255, 255, 255, TEX.barFrame)
         o.text = UI.text(parent, '', x, top, w, h, textSize or 0.0085, TEXT_JUSTIFY_CENTER)
         return o
+    end
+
+    -- Moves a bar from UI.bar, keeping its size (the fill keeps its width).
+    function UI.moveBar(o, x, top)
+        local h = o.h
+        BlzFrameClearAllPoints(o.back)
+        BlzFrameSetAbsPoint(o.back, FRAMEPOINT_TOPLEFT, x, top)
+        BlzFrameClearAllPoints(o.fill)
+        BlzFrameSetAbsPoint(o.fill, FRAMEPOINT_TOPLEFT, x, top)
+        UI.place(o.edge, x - h * 0.35, top + h * 0.3, o.w + h * 0.7, h * 1.6)
+        UI.place(o.text, x, top, o.w, h)
     end
 
     function UI.setBar(o, fraction, label)
@@ -2345,6 +2378,12 @@ do
         return b.flat and x or x * 100
     end
 
+    -- Total of a blessing after `rank` picks at `power` (1 plus every rarity bonus so far),
+    -- so rarity multiplies the whole stack, as it does for spells.
+    function G.blessingTotal(b, rank, power)
+        return b.per * rank * power
+    end
+
     function G.describeBlessing(b, x)
         return (b.desc:gsub('{v}', U.col('ffffff', U.num(G.blessingValue(b, x)))))
     end
@@ -2628,6 +2667,14 @@ do
         protection = {name = 'Shrine of Protection', model = 'Doodads\\Ruins\\Props\\Statue\\Statue0.mdl', scale = 0.85}
     }
     local WORLD_OBJECT_KINDS = {'barrel', 'treasure', 'vein', 'chest', 'chance', 'protection', 'wealth'}
+    -- Scattered placement: the arena is split into a 4 by 4 grid, each cell is
+    -- used once per shuffle, objects keep 900 apart and 500 from the hero.
+    local WORLD_OBJECT_GRID = 4
+    local WORLD_OBJECT_CELL_MARGIN = 220
+    local WORLD_OBJECT_MIN_SPACING = 900
+    local WORLD_OBJECT_HERO_CLEARANCE = 500
+    local WORLD_OBJECT_CELL_TRIES = 24
+    local WORLD_OBJECT_MAP_TRIES = 96
 
     -- Price of a paid object: chests climb with every chest (or shrine) used.
     function G.worldObjectPrice(object)
@@ -2651,7 +2698,10 @@ do
             object.priceTag = CreateTextTag()
         end
         if object.priceTag then
-            SetTextTagText(object.priceTag, U.col(GOLD, tostring(cost) .. ' gold'), 0.026)
+            -- Plain text in the tag's own colour: a colour code also tinted the
+            -- engine's drop shadow, which then read as a second gold label.
+            SetTextTagText(object.priceTag, tostring(cost) .. ' gold', 0.026)
+            SetTextTagColor(object.priceTag, 255, 210, 122, 255)
             SetTextTagPos(object.priceTag, object.x - 60, object.y, 210)
             SetTextTagVelocity(object.priceTag, 0, 0)
             SetTextTagPermanent(object.priceTag, true)
@@ -2665,23 +2715,115 @@ do
         end
     end
 
-    -- Open walkable ground for an object, away from the others.
-    function G.worldObjectPoint(minR, maxR)
-        local x, y
-        for _ = 1, 10 do
-            x, y = G.spawnPoint(minR, maxR)
-            local clear = G.walkable(x, y)
-            for _, other in ipairs(R.interactables) do
-                local dx, dy = other.x - x, other.y - y
-                if dx * dx + dy * dy < 250 * 250 then
-                    clear = false
-                end
-            end
-            if clear then
-                break
+    -- Shuffled order of the grid cells; a new run or a new cycle reshuffles it.
+    function G.shuffleWorldObjectCells()
+        local cells = {}
+        for row = 0, WORLD_OBJECT_GRID - 1 do
+            for column = 0, WORLD_OBJECT_GRID - 1 do
+                cells[#cells + 1] = {id = row * WORLD_OBJECT_GRID + column + 1, row = row, column = column}
             end
         end
-        return x, y
+        for i = #cells, 2, -1 do
+            local j = GetRandomInt(1, i)
+            cells[i], cells[j] = cells[j], cells[i]
+        end
+        R.objectCellOrder = cells
+        R.objectCellCursor = 1
+    end
+
+    function G.worldObjectPositionClear(x, y)
+        local heroDx, heroDy = x - R.hx, y - R.hy
+        if heroDx * heroDx + heroDy * heroDy < WORLD_OBJECT_HERO_CLEARANCE * WORLD_OBJECT_HERO_CLEARANCE then
+            return false
+        end
+        local minDistance = WORLD_OBJECT_MIN_SPACING * WORLD_OBJECT_MIN_SPACING
+        for _, object in ipairs(R.interactables) do
+            if object.active then
+                local dx, dy = x - object.x, y - object.y
+                if dx * dx + dy * dy < minDistance then
+                    return false
+                end
+            end
+        end
+        return true
+    end
+
+    function G.worldObjectCellOccupied(cell)
+        for _, object in ipairs(R.interactables) do
+            if object.active and object.cell == cell then
+                return true
+            end
+        end
+        return false
+    end
+
+    function G.tryWorldObjectCell(cell)
+        local width = (G.maxX - G.minX) / WORLD_OBJECT_GRID
+        local height = (G.maxY - G.minY) / WORLD_OBJECT_GRID
+        local minX = G.minX + cell.column * width + WORLD_OBJECT_CELL_MARGIN
+        local maxX = G.minX + (cell.column + 1) * width - WORLD_OBJECT_CELL_MARGIN
+        local minY = G.minY + cell.row * height + WORLD_OBJECT_CELL_MARGIN
+        local maxY = G.minY + (cell.row + 1) * height - WORLD_OBJECT_CELL_MARGIN
+        if minX >= maxX or minY >= maxY then
+            return nil, nil
+        end
+        for _ = 1, WORLD_OBJECT_CELL_TRIES do
+            local x = GetRandomReal(minX, maxX)
+            local y = GetRandomReal(minY, maxY)
+            if G.walkable(x, y) and G.worldObjectPositionClear(x, y) then
+                return x, y
+            end
+        end
+        return nil, nil
+    end
+
+    -- A free point for an object: the next free cell in the shuffled order,
+    -- then any random point on the map. Returns x, y and the cell id.
+    function G.spawnWorldObjectPoint()
+        if R == nil then
+            return nil, nil, nil
+        end
+        if R.objectCellOrder == nil or R.objectCellCursor > #R.objectCellOrder then
+            G.shuffleWorldObjectCells()
+        end
+        local order = R.objectCellOrder
+        for _ = 1, #order do
+            local cell = order[R.objectCellCursor]
+            R.objectCellCursor = R.objectCellCursor + 1
+            if not G.worldObjectCellOccupied(cell.id) then
+                local x, y = G.tryWorldObjectCell(cell)
+                if x then
+                    return x, y, cell.id
+                end
+            end
+        end
+        local width = (G.maxX - G.minX) / WORLD_OBJECT_GRID
+        local height = (G.maxY - G.minY) / WORLD_OBJECT_GRID
+        for _ = 1, WORLD_OBJECT_MAP_TRIES do
+            local x = GetRandomReal(G.minX + WORLD_OBJECT_CELL_MARGIN, G.maxX - WORLD_OBJECT_CELL_MARGIN)
+            local y = GetRandomReal(G.minY + WORLD_OBJECT_CELL_MARGIN, G.maxY - WORLD_OBJECT_CELL_MARGIN)
+            if G.walkable(x, y) and G.worldObjectPositionClear(x, y) then
+                local column = U.clamp(math.floor((x - G.minX) / width), 0, WORLD_OBJECT_GRID - 1)
+                local row = U.clamp(math.floor((y - G.minY) / height), 0, WORLD_OBJECT_GRID - 1)
+                local cell = row * WORLD_OBJECT_GRID + column + 1
+                if not G.worldObjectCellOccupied(cell) then
+                    return x, y, cell
+                end
+            end
+        end
+        return nil, nil, nil
+    end
+
+    function G.spawnRandomWorldObject(kind)
+        local x, y, cell = G.spawnWorldObjectPoint()
+        if x == nil then
+            return nil
+        end
+        local object = G.spawnWorldObject(kind, x, y)
+        if object then
+            object.cell = cell
+        end
+        return object
     end
 
     function G.spawnWorldObject(kind, x, y, force)
@@ -2795,7 +2937,10 @@ do
             local amount = GetRandomInt(range[1], range[2])
             G.addGold(amount)
             Hud.banner(U.col(GOLD, object.name) .. '  -  ' .. amount .. ' gold')
-            G.fx((kind == 'vein' or kind == 'barrel') and FX.explosion or FX.teleport, object.x, object.y, 0.5)
+            -- A burst of coins and the item pickup sound (it used to be a
+            -- building explosion, boom included).
+            G.fx(FX.transmute, object.x, object.y, 0.8)
+            G.sound('ItemGet', object.x, object.y)
             G.removeWorldObject(object)
         end
     end
@@ -2854,8 +2999,7 @@ do
         if R.time >= R.objectClock then
             R.objectClock = R.time + GetRandomReal(58, 78)
             if #list < CFG.MAX_WORLD_OBJECTS then
-                local x, y = G.worldObjectPoint(360, 700)
-                G.spawnWorldObject(WORLD_OBJECT_KINDS[GetRandomInt(1, #WORLD_OBJECT_KINDS)], x, y)
+                G.spawnRandomWorldObject(WORLD_OBJECT_KINDS[GetRandomInt(1, #WORLD_OBJECT_KINDS)])
             end
         end
     end
@@ -5060,8 +5204,7 @@ do
             end
         else
             for _, kind in ipairs({'vein', 'barrel', 'chest'}) do
-                local x, y = G.worldObjectPoint(300, 520)
-                G.spawnWorldObject(kind, x, y)
+                G.spawnRandomWorldObject(kind)
             end
         end
         G.spawnCompanion()
@@ -6058,13 +6201,15 @@ do
         elseif c.type == 'blessing' then
             local def = BLESSING_BY_KEY[c.key]
             local current = R.blessings[c.key]
-            local amount = def.per * (1 + rarity.bonus)
+            local rank = current and current.rank + 1 or 1
+            local total = G.blessingTotal(def, rank, (current and current.power or 1) + rarity.bonus)
+            local amount = total - (current and current.value or 0)
             icon = U.icon(def.code, def.icon)
             name = def.name
             sub = 'Blessing'
             desc = G.describeBlessing(def, amount)
             if current then
-                desc = desc .. '\n' .. U.col(GREY, 'Total: ') .. G.describeBlessing(def, current.value + amount)
+                desc = desc .. '\n' .. U.col(GREY, 'Total: ') .. G.describeBlessing(def, total)
             end
             foot = 'No spell slot  -  rank ' .. (current and current.rank + 1 or 1)
         elseif c.type == 'gold' then
@@ -6139,12 +6284,13 @@ do
         elseif c.type == 'blessing' then
             local b = R.blessings[c.key]
             if b == nil then
-                b = {rank = 0, value = 0}
+                b = {rank = 0, value = 0, power = 1}
                 R.blessings[c.key] = b
                 R.blessingOrder[#R.blessingOrder + 1] = c.key
             end
             b.rank = b.rank + 1
-            b.value = b.value + BLESSING_BY_KEY[c.key].per * (1 + bonus)
+            b.power = b.power + bonus
+            b.value = G.blessingTotal(BLESSING_BY_KEY[c.key], b.rank, b.power)
         elseif c.type == 'gold' then
             G.addGold(25)
         elseif c.type == 'heal' then
@@ -6733,8 +6879,8 @@ do
         UI.setActive(Options.mouseMode, not wasd)
         UI.setActive(Options.keyMode, wasd)
         BlzFrameSetText(Options.modeHint, U.col(GREY, wasd
-            and ('Hold ' .. Keys.moveLabel() .. ' to walk. Right-clicks do not move the hero.')
-            or (Engine.active() and 'Right-click the ground to walk there, or hold it: the hero follows the cursor.'
+            and ('Hold ' .. Keys.moveLabel() .. ' to walk. Clicks do not move the hero.')
+            or (Engine.active() and 'Left or right click the ground to walk there, or hold it: the hero follows the cursor.'
                 or 'Right-click the ground to walk there. The movement keys do nothing.')))
         for _, a in ipairs(ACTIONS) do
             local row = Options.binds[a.key]
@@ -6904,17 +7050,31 @@ do
         else
             Lobby.title = UI.text(root, U.col(GOLD, 'WARCRAFT SURVIVORS'), LAY.x0, 0.598, LAY.w, 0.032, 0.024, TEXT_JUSTIFY_CENTER)
         end
-        -- Browser only: a download of the Windows build, top right; the
-        -- rating moves to its left.
-        local download = Engine.web() and SURVIVOR_ENGINE.download
-        local goldRight = LAY.x1
-        if download and rawget(_G, 'EngineOpenURL') then
-            goldRight = LAY.x1 - 0.122
-            UI.button(root, goldRight + 0.008, 0.596, 0.114, 0.024, U.col(GOLD, 'Download for Windows'), function()
-                EngineOpenURL(download)
-            end, 'dark', 0.0088)
+        -- Top right, from the left: a download of the Windows build (browser
+        -- only), the Twitch channel (both). Each is {label, url, width}; the
+        -- Twitch button is as wide as its text.
+        local links = {}
+        if Engine.web() and SURVIVOR_ENGINE.download then
+            links[#links + 1] = {'Download for Windows', SURVIVOR_ENGINE.download, 0.114}
         end
-        Lobby.gold = UI.text(root, '', goldRight - 0.3, 0.594, 0.3, 0.014, 0.0085, TEXT_JUSTIFY_RIGHT)
+        if SURVIVOR_ENGINE.twitch then
+            links[#links + 1] = {'Twitch', SURVIVOR_ENGINE.twitch, 0.05}
+        end
+        local goldRight = LAY.x1
+        if #links > 0 and rawget(_G, 'EngineOpenURL') then
+            local right = LAY.x1
+            for i = #links, 1, -1 do
+                local link = links[i]
+                UI.button(root, right - link[3], 0.596, link[3], 0.024, U.col(GOLD, link[1]), function()
+                    EngineOpenURL(link[2])
+                end, 'dark', 0.0088)
+                right = right - link[3] - 0.008
+            end
+            goldRight = right
+        end
+        -- The rating and gold end at the buttons; the box starts right of the
+        -- title's letters (which end near 0.535), so the text never runs into it.
+        Lobby.gold = UI.text(root, '', 0.545, 0.594, goldRight - 0.545, 0.014, 0.0085, TEXT_JUSTIFY_RIGHT)
         UI.button(root, LAY.x0, 0.596, 0.1, 0.024, 'Options  ' .. U.col(GREY, '[Esc]'), function()
             Options.show()
         end, 'dark', 0.0088)
@@ -6963,7 +7123,7 @@ do
             return
         end
         local move = Keys.wasd() and (Keys.moveLabel() .. ' to move')
-            or (Engine.active() and 'Right-click or hold right-click to move' or 'Right-click to move')
+            or (Engine.active() and 'Left or right click, or hold it, to move' or 'Right-click to move')
         BlzFrameSetText(Lobby.footer, U.col(GREY, move .. '  -  attacks and spells cast themselves  -  '
             .. Keys.label('card1') .. ' ' .. Keys.label('card2') .. ' ' .. Keys.label('card3') .. ' picks a card  -  '
             .. Keys.label('reroll') .. ' rerolls  -  ' .. Keys.label('play') .. ' to play  -  Esc for options'))
@@ -8389,7 +8549,9 @@ do
             EngineCvar('cl_fkeys', '0')
             -- Holding the right button (or a finger on the ground, on a touch
             -- screen) keeps sending the point under it: the hero follows.
+            -- The left button does the same (cl_smart_left), as players asked.
             EngineCvar('cl_smart_hold', '1')
+            EngineCvar('cl_smart_left', '1')
             EngineCvar('cl_touch_smart', '1')
         end
 
@@ -8522,7 +8684,9 @@ do
     -- them and starts the new version.
     ---------------------------------------------------------------------------
     local UPDATE_DIR = 'WarcraftSurvivors\\Update\\'
-    local UW = {x = 0.22, top = 0.43, w = 0.36, h = 0.2}
+    -- The window is centred on y 0.33; its notes box grows with the notes
+    -- (at least notesH, the size it had when it was fixed).
+    local UW = {x = 0.20, top = 0.43, w = 0.40, h = 0.2, notesH = 0.05, notesSize = 0.0088, mid = 0.33}
 
     function Updater.enabled()
         return Engine.active() and not Engine.web() and (EngineCvar('survivor_updater') or '') ~= ''
@@ -8557,11 +8721,11 @@ do
         UI.box(group, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 170)
         BlzFrameSetLevel(UI.hit(group, -0.3, 0.6, 1.4, 0.6), 0)
         local x, T, w = UW.x, UW.top, UW.w
-        UI.card(group, x, T, w, UW.h)
+        W.card, W.fill = UI.card(group, x, T, w, UW.h)
         local ix, iw = x + 0.024, w - 0.048
         W.title = UI.text(group, '', x, T - 0.02, w, 0.03, 0.019, TEXT_JUSTIFY_CENTER)
         W.versions = UI.text(group, '', x, T - 0.052, w, 0.02, 0.012, TEXT_JUSTIFY_CENTER)
-        W.notes = UI.text(group, '', ix, T - 0.08, iw, 0.05, 0.0088, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP)
+        W.notes = UI.text(group, '', ix, T - 0.08, iw, UW.notesH, UW.notesSize, TEXT_JUSTIFY_CENTER, TEXT_JUSTIFY_TOP)
         W.size = UI.text(group, '', ix, T - 0.132, iw, 0.014, 0.0078, TEXT_JUSTIFY_CENTER)
         W.download = UI.button(group, 0.29, T - 0.152, 0.14, 0.032, U.col(GOLD, 'Download & restart'), function()
             Updater.download()
@@ -8578,10 +8742,59 @@ do
         end)
     end
 
+    -- Places the window around a notes box notesH high: the size line, the
+    -- buttons and the card's bottom move down by what the notes add.
+    function Updater.layout(notesH)
+        local W = Updater.W
+        local x, w = UW.x, UW.w
+        local ix, iw = x + 0.024, w - 0.048
+        local extra = notesH - UW.notesH
+        local h = UW.h + extra
+        local T = math.min(0.585, UW.mid + h / 2)
+        UI.sizeCard(W.card, W.fill, x, T, w, h)
+        UI.place(W.title, x, T - 0.02, w, 0.03)
+        UI.place(W.versions, x, T - 0.052, w, 0.02)
+        UI.place(W.notes, ix, T - 0.08, iw, notesH)
+        UI.place(W.size, ix, T - 0.132 - extra, iw, 0.014)
+        UI.moveButton(W.download, 0.29, T - 0.152 - extra, 0.14, 0.032)
+        UI.moveButton(W.later, 0.44, T - 0.152 - extra, 0.07, 0.032)
+        UI.place(W.percent, x, T - 0.078, w, 0.026)
+        UI.moveBar(W.bar, ix + 0.01, T - 0.116)
+        UI.place(W.detail, ix, T - 0.142, iw, 0.014)
+    end
+
+    -- Notes longer than the window can hold are cut at a word, with "...", so
+    -- the text never runs past the box whatever the patch notes say. The
+    -- budget keeps 15 percent spare for words that wrap early.
+    function Updater.fitNotes(s)
+        local perLine = math.max(1, math.floor((UW.w - 0.048) / (UW.notesSize * 0.62)))
+        local maxLines = math.floor((0.57 - UW.h + UW.notesH) / (UW.notesSize * 1.5)) - 1
+        local budget = math.floor(maxLines * perLine * 0.85)
+        local text = U.strip(s)
+        if string.len(text) <= budget then
+            return text
+        end
+        local cut = string.sub(text, 1, budget)
+        cut = string.match(cut, '^(.*)\037s') or cut
+        return cut .. ' ...'
+    end
+
+    -- Height of the notes box for this text, within what the screen holds.
+    function Updater.notesHeight(s)
+        local lines = UI.textLines(s, UW.w - 0.048, UW.notesSize)
+        -- A line is about 1.5 font sizes tall; one spare line keeps the last
+        -- line clear of the size line and the buttons below it.
+        local h = (lines + 1) * UW.notesSize * 1.5
+        return U.clamp(h, UW.notesH, 0.57 - UW.h + UW.notesH)
+    end
+
     -- offer: notes and the two buttons; progress: percent and bar.
     function Updater.setMode(mode)
         local W = Updater.W
         local offer = mode == 'offer'
+        if not offer then
+            Updater.layout(UW.notesH)
+        end
         BlzFrameSetVisible(W.notes, offer)
         BlzFrameSetVisible(W.size, offer)
         UI.showButton(W.download, offer)
@@ -8597,7 +8810,9 @@ do
         BlzFrameSetText(W.title, U.col(GOLD, errorText and 'The download failed' or 'A new version is out!'))
         BlzFrameSetText(W.versions, U.col('d8cfc0', 'v' .. tostring(SURVIVOR_ENGINE.version or '?')) .. '   '
             .. U.col(GOLD, '>') .. '   ' .. U.col(GREEN, 'v' .. tostring(info.version)))
-        BlzFrameSetText(W.notes, errorText and U.col(RED, errorText) or U.col('ffffff', tostring(info.notes or '')))
+        local notes = Updater.fitNotes(errorText or tostring(info.notes or ''))
+        BlzFrameSetText(W.notes, U.col(errorText and RED or 'ffffff', notes))
+        Updater.layout(Updater.notesHeight(notes))
         local files = tonumber(info.files) or 0
         BlzFrameSetText(W.size, U.col(GREY, Updater.mb(info.size) .. ' download (' .. files
             .. (files == 1 and ' file' or ' files') .. ')  -  the game restarts when it is done'))
