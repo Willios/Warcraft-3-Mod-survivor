@@ -185,11 +185,6 @@ run in the standalone engine.
 - **Black world at start** (engine, intermittent): sometimes only the HUD draws. Not reproduced in
   recent runs.
 
-## Roadmap
-
-- **Co-op** (planned, not started): online co-op through a relay server, host-authoritative. See
-  [docs/coop-plan.md](docs/coop-plan.md).
-
 ## Repository layout
 
 | Path | What it is |
@@ -201,7 +196,7 @@ run in the standalone engine.
 | `tools/smoketest/` | Runs the script against mocked natives: `python tools/smoketest/run.py` (needs `pip install lupa`) |
 | `tools/engine_tests/` | Test scripts for the standalone engine |
 | `tools/release/` | Builds the Windows download, the portable build and the update files |
-| `docs/` | Screenshots and the co-op plan |
+| `docs/` | Screenshots |
 | `engine/` | Not in this repository: the [OpenRealm fork](https://github.com/Willios/open-realm-williosfork/tree/survivor) is cloned here |
 
 ## How it works
