@@ -9,7 +9,7 @@ The reference is a design guide, not an asset source. Everything is built at run
 ## Run
 
 - **Length:** bosses at 2:00, 4:00, 6:00 and 8:00; the zone's final boss arrives at 10:00. Killing the final boss wins the run; the hero dying loses it.
-- **Movement:** WASD or the arrow keys. The script moves the hero itself (`SetUnitX/Y` with a pathing probe) and the native Move and Attack abilities are removed, so the hero attacks while walking.
+- **Movement:** a left or right click on the ground walks there, a held click follows the cursor, and WASD walks when keyboard movement is on (never both). The script moves the hero itself (`SetUnitX/Y` with a pathing probe) and the native Move and Attack abilities are removed, so the hero attacks while walking.
 - **Basic attack:** every hero attacks the nearest enemy on its own. Ranged heroes fire their real Warcraft projectile, read from the unit's weapon data; melee heroes swing and cleave.
 - **Spells:** each hero starts with one spell and has a pool of eight. About 100 spells share 11 behaviours: bolt, nova, zone, chain, line, orbit, aura, summon, heal, buff and passive. Up to 6 spell slots, ranks 1 to 5.
 - **Pickups:** experience gems, gold, healing runes, magnets, and chests from elites and bosses.
@@ -40,15 +40,7 @@ Difficulties open zone by zone: win Normal to open Heroic, Heroic to open Mythic
 | Mythic | x2.6 | x1.9 | x2.2 | +20 |
 | Mythic +N | Mythic x 1.10^(N-1) | Mythic x 1.08^(N-1) | 2.2 + 0.15(N-1) | +20 + 2N, capped at +10 |
 
-Keystones have no upper level. Affixes join as the key rises:
-
-| Key | Affix | Effect |
-| --- | --- | --- |
-| +2 | Fortified | Non-boss enemies +20% health, +10% damage |
-| +4 | Bursting | Slain enemies within 220 deal 0.6% max health to the hero, at most 8 bursts a second |
-| +7 | Tyrannical | Bosses +40% health, +20% damage |
-| +10 | Raging | Enemies below 30% health deal +50% damage |
-| +12 | Xal'atath's Guile | No extra lives; dodge halved |
+Keystones have no upper level and no affixes: every level compounds health and damage on its own. Endless mode (after the final boss) keeps compounding them each minute.
 
 **Keystone timer:** killing the final boss within 45 s of its arrival upgrades the key by +3, within 80 s by +2, and within 120 s by +1. A timed key opens higher keys for that zone; a late kill still wins the run but the key is depleted. The **Mythic+ rating** adds `100 + 15 x level` for each zone's best timed key.
 
@@ -68,12 +60,12 @@ Keystones have no upper level. Affixes join as the key rises:
 | Armory | Gear by zone and boss, item levels, upgrade track, equipped list and average item level |
 | Codex | Every spell and blessing a run has offered |
 | Talents | Permanent upgrades bought with gold |
-| Achievements | 34 achievements, including keystone and gear ones |
+| Achievements | 28 achievements, including keystone and gear ones |
 | Rewards | Perks bought with achievement points (rerolls, banish, skip, opening hand, keen eye, lucky star, wide hand, second wind) |
 
-Six zones re-theme the same arena with their own enemies, bosses, fog and time of day: Ashenvale, Westfall, The Barrens, Plaguelands, Felwood and Northrend. Winning a zone opens the next.
+Twelve zones, each on its own official melee map with its own enemies, bosses, fog and time of day: Ashenvale, Westfall, Tirisfal Glades, The Barrens, Stranglethorn Vale, Plaguelands, Alterac Valley, Felwood, Dalaran, Hellfire Peninsula, The Black Temple and Northrend (the play order is `ZONE_ORDER` in the script). Winning a zone opens the next.
 
-Progress is saved with Preload files to `Documents\Warcraft III\CustomMapData\WarcraftSurvivors\profile.pld`.
+Progress is saved with Preload files to `%APPDATA%\warcraft-3\CustomMapData\WarcraftSurvivors\profile.pld` in the standalone engine (Reforged uses its own map data folder).
 
 ## Editor setup
 
