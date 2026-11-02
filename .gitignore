@@ -16,6 +16,8 @@ src/art/zone_*.tga
 /engine/
 
 # --- Local and generated files ---------------------------------------------
+# Notes for Claude Code: kept on this machine, not on GitHub.
+CLAUDE.md
 map/*.w3mTemp/
 .vscode/
 .claude/
