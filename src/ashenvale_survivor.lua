@@ -1175,7 +1175,7 @@ do
         {{'sksh', 'Skull Shield', 'armor'}, {'grsl', 'Grimoire of Souls', 'lifesteal'}, {'nspi', 'Necklace of Spell Immunity', 'dr'},
             {'ocor', 'Orb of Corruption', 'damage'}, {'crdt', 'Crown of the Deathlord', 'gold'}}
     }
-    local GEAR_UPGRADES = 6     -- steps on the upgrade track
+    local GEAR_UPGRADES = 12    -- steps on the upgrade track
     local GEAR_STEP_ILVL = 3    -- item levels per step
 
     local GEAR = {}
@@ -1252,13 +1252,15 @@ do
         return 'e6e6e6'
     end
 
-    -- Mythic+ rating: 100 plus 15 per level of each zone's best timed keystone.
+    -- Mythic+ rating: each zone's best timed keystone scores 100 plus 15 per level,
+    -- scaled by the zone's power ^ 0.7 (the same curve as enemy damage), so a +2 in
+    -- Northrend counts for more than a +2 in Ashenvale.
     local function keystoneRating(p)
         local rating = 0
         for zi = 1, #ZONES do
             local best = p.keyBest[tostring(zi)] or 0
             if best > 0 then
-                rating = rating + 100 + 15 * best
+                rating = rating + math.floor((100 + 15 * best) * ZONES[zi].power ^ 0.7 + 0.5)
             end
         end
         return rating
@@ -1277,29 +1279,31 @@ do
     ---------------------------------------------------------------------------
     -- Talents are bought with gold earned in runs. They apply to every hero.
     local TALENTS = {
-        {key = 'might', name = 'Might', code = 'ratc', icon = 'BTNClawsOfAttack', per = 0.04, max = 5, desc = '+{v}\037 damage',
+        {key = 'might', name = 'Might', code = 'ratc', icon = 'BTNClawsOfAttack', per = 0.04, max = 10, desc = '+{v}\037 damage',
             apply = function(s, x) s.damage = s.damage + x end},
-        {key = 'vitality', name = 'Vitality', code = 'prvt', icon = 'BTNPeriapt', per = 30, flat = true, max = 5, desc = '+{v} maximum health',
+        {key = 'vitality', name = 'Vitality', code = 'prvt', icon = 'BTNPeriapt', per = 30, flat = true, max = 10, desc = '+{v} maximum health',
             apply = function(s, x) s.maxHp = s.maxHp + x end},
-        {key = 'swiftness', name = 'Swiftness', code = 'bspd', icon = 'BTNBootsOfSpeed', per = 0.03, max = 5, desc = '+{v}\037 movement speed',
+        {key = 'swiftness', name = 'Swiftness', code = 'bspd', icon = 'BTNBootsOfSpeed', per = 0.03, max = 10, desc = '+{v}\037 movement speed',
             apply = function(s, x) s.move = s.move + x end},
-        {key = 'haste', name = 'Haste', code = 'rwiz', icon = 'BTNSobiMask', per = 0.03, max = 5, desc = 'Spells recharge {v}\037 faster',
+        {key = 'haste', name = 'Haste', code = 'rwiz', icon = 'BTNSobiMask', per = 0.03, max = 10, desc = 'Spells recharge {v}\037 faster',
             apply = function(s, x) s.cdr = s.cdr + x end},
-        {key = 'wisdom', name = 'Wisdom', code = 'tkno', icon = 'BTNTome', per = 0.06, max = 5, desc = '+{v}\037 experience',
+        {key = 'wisdom', name = 'Wisdom', code = 'tkno', icon = 'BTNTome', per = 0.06, max = 10, desc = '+{v}\037 experience',
             apply = function(s, x) s.xp = s.xp + x end},
-        {key = 'greed', name = 'Greed', code = 'pghe', icon = 'BTNChestOfGold', per = 0.10, max = 5, desc = '+{v}\037 gold',
+        {key = 'greed', name = 'Greed', code = 'pghe', icon = 'BTNChestOfGold', per = 0.10, max = 10, desc = '+{v}\037 gold',
             apply = function(s, x) s.gold = s.gold + x end},
-        {key = 'magnetism', name = 'Magnetism', code = 'mcou', icon = 'BTNMedalionOfCourage', per = 0.15, max = 5, desc = '+{v}\037 pickup range',
+        {key = 'magnetism', name = 'Magnetism', code = 'mcou', icon = 'BTNMedalionOfCourage', per = 0.15, max = 10, desc = '+{v}\037 pickup range',
             apply = function(s, x) s.pickup = s.pickup + x end},
-        {key = 'precision', name = 'Precision', code = 'hcun', icon = 'BTNHoodOfCunning', per = 0.02, max = 5, desc = '+{v}\037 critical strike',
+        {key = 'precision', name = 'Precision', code = 'hcun', icon = 'BTNHoodOfCunning', per = 0.02, max = 10, desc = '+{v}\037 critical strike',
             apply = function(s, x) s.crit = s.crit + x end},
-        {key = 'regeneration', name = 'Regeneration', code = 'rlif', icon = 'BTNRingGreen', per = 0.3, flat = true, max = 5, desc = '+{v} health per second',
+        {key = 'regeneration', name = 'Regeneration', code = 'rlif', icon = 'BTNRingGreen', per = 0.3, flat = true, max = 10, desc = '+{v} health per second',
             apply = function(s, x) s.regen = s.regen + x end},
-        {key = 'armor', name = 'Toughness', code = 'rde1', icon = 'BTNRingJadeFalcon', per = 1, flat = true, max = 5, desc = '+{v} armor',
+        {key = 'armor', name = 'Toughness', code = 'rde1', icon = 'BTNRingJadeFalcon', per = 1, flat = true, max = 10, desc = '+{v} armor',
             apply = function(s, x) s.armor = s.armor + x end},
-        {key = 'siphon', name = 'Siphon Life', code = 'AUav', icon = 'BTNVampiricAura', per = 0.01, max = 5,
+        {key = 'siphon', name = 'Siphon Life', code = 'AUav', icon = 'BTNVampiricAura', per = 0.01, max = 10,
             desc = 'Attacks and spells heal for {v}\037 of their damage',
-            apply = function(s, x) s.lifesteal = s.lifesteal + x end}
+            apply = function(s, x) s.lifesteal = s.lifesteal + x end},
+        {key = 'reduction', name = 'Damage Reduction', code = 'AHad', icon = 'BTNDevotion', per = 0.02, max = 10,
+            desc = '+{v}\037 damage reduction', apply = function(s, x) s.dr = s.dr + x end}
     }
     local function talentCost(rank)
         return math.floor(60 * rank ^ 1.6 + 0.5)
@@ -1314,7 +1318,7 @@ do
         {key = 'skip', name = 'Skip', code = 'pghe', icon = 'BTNChestOfGold', costs = {10},
             desc = 'Pass on any hand and take gold instead.'},
         {key = 'opening', name = 'Opening Hand', code = 'tkno', icon = 'BTNTome', costs = {20},
-            desc = 'Your first level-up of every run deals four cards.'},
+            desc = 'Every card in your first hand of each run is Rare or better.'},
         {key = 'keen', name = 'Keen Eye', code = 'AEst', icon = 'BTNScout', costs = {15, 25},
             desc = 'Bosses are 10\037 more likely to drop gear per rank.'},
         {key = 'lucky', name = 'Lucky Star', code = 'cnob', icon = 'BTNCirclet', costs = {15, 25, 35},
@@ -1324,7 +1328,9 @@ do
         {key = 'secondwind', name = 'Second Wind', code = 'AHre', icon = 'BTNResurrection', costs = {40},
             desc = 'Return to life once per run at half health.'},
         {key = 'companion', name = 'Wisp Companion', code = 'ewsp', icon = 'BTNWisp', costs = {25, 35, 45},
-            desc = 'A wisp fetches experience gems and gold for you. Faster and wider-ranging per rank.'}
+            desc = 'A wisp fetches experience gems and gold for you. Faster and wider-ranging per rank.'},
+        {key = 'goldrush', name = 'Gold Rush', code = 'pghe', icon = 'BTNChestOfGold', costs = {25},
+            desc = 'Gold pickups on the ground are doubled for the first 3 minutes of each run.'}
     }
     local PERK_BY_KEY = {}
     for _, perk in ipairs(PERKS) do
@@ -1403,8 +1409,8 @@ do
         function(p) return maxValue(p.keyBest), 10 end)
     achievement('keystone_master', 'Keystone Master', 'Time a +15 keystone.', 'AUin', 'BTNInfernal', 50,
         function(p) return maxValue(p.keyBest), 15 end)
-    achievement('keystone_hero', 'Keystone Hero', 'Reach a Mythic+ rating of 1,500.', 'AOvd', 'BTNBigBadVoodooSpell', 60,
-        function(p) return keystoneRating(p), 1500 end)
+    achievement('keystone_hero', 'Keystone Hero', 'Reach a Mythic+ rating of 2,500.', 'AOvd', 'BTNBigBadVoodooSpell', 60,
+        function(p) return keystoneRating(p), 2500 end)
 
     ---------------------------------------------------------------------------
     -- Utilities
@@ -3723,7 +3729,8 @@ do
         if p.kind == 'xp' then
             G.gainXp(p.value)
         elseif p.kind == 'gold' then
-            G.addGold(p.value)
+            local rush = Profile.perk('goldrush') > 0 and R.time < 180 and 2 or 1
+            G.addGold(p.value * rush)
         elseif p.kind == 'heal' then
             G.heal(BlzGetUnitMaxHP(R.hero) * 0.25)
             DestroyEffect(AddSpecialEffectTarget(FX.healingWave, R.hero, 'origin'))
@@ -6147,11 +6154,15 @@ do
 
     function Cards.open(kind)
         local size = CFG.HAND_SIZE
-        if Profile.perk('wide') > 0 or (R.handsDealt == 0 and Profile.perk('opening') > 0) then
+        if Profile.perk('wide') > 0 then
             size = 4
         end
+        local first = R.handsDealt == 0
         R.handsDealt = R.handsDealt + 1
         local minimum = kind == 'chest' and 3 or 1
+        if first and Profile.perk('opening') > 0 then
+            minimum = 3
+        end
         R.hand = {kind = kind, size = size, minimum = minimum, cards = Cards.draw(size, nil, minimum)}
         G.setPaused(true)
         Cards.render()

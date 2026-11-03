@@ -24,8 +24,8 @@ SURVIVOR_ENGINE = {
     -- copies both into the portable build's version.json; the portable launcher
     -- compares it with the one under update (the uploaded release) and the
     -- lobby offers the newer one (Updater). Raise the version for every release.
-    version = '1.3.5',
-    notes = 'Carrion Swarm deals 30 percent less damage. Devotion Aura armor, the movement and attack speed of Endurance Aura and the dodge of Evasion now grow much more slowly with rank and rarity. The left mouse button works like the right one: click the ground to walk there, or hold it and the hero follows the cursor. The Twitch button in the top right of the lobby is as wide as its name and opens the channel in a new tab.',
+    version = '1.4.0',
+    notes = 'Mythic+ rating now depends on the zone: a timed key scores more in a harder zone (Northrend +2 counts far more than Ashenvale +2). Keystone Hero needs 2,500 rating (was 1,500). Item upgrades go to level 12 (was 6), with the gold price rising each step. Talents go to rank 10 (was 5), so every talent is twice as strong at max. New talent: Damage Reduction, +2 percent per rank. Opening Hand now makes every card in your first hand of a run Rare or better (it no longer deals four cards, which Wide Hand already does). New perk: Gold Rush, ground gold pickups are doubled for the first 3 minutes of a run.',
     update = 'https://warcraftsurvivor.para-bellum.eu/download/portable/',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art
