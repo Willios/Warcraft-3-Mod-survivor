@@ -13,6 +13,7 @@
 *	Doodads\Outland\Props\Standard\Standard0.mdx
 *	Objects\Spawnmodels\Orc\Orcblood\HeroShadowHunterBlood.mdx
 *	Objects\Spawnmodels\Undead\UndeadBlood\UndeadBloodCryptFiend.mdx
+*	Sound\Interface\BigButtonClick.wav
 *	Sound\Interface\PickUpItem.wav
 *	Sound\Music\mp3Music\ArthasTheme.mp3
 *	Sound\Music\mp3Music\BloodElfTheme.mp3
@@ -62,6 +63,7 @@
 *	Units\Demon\Infernal\InfernalAttack2.wav
 *	Units\Human\HeroPaladin\HeroPaladinAttack2.wav
 *	Units\Human\MortarTeam\MortarTeamAttack2.wav
+*	Units\NightElf\HeroDemonHunter\DemonHunterDeathAlternate1.wav
 *	Units\NightElf\HeroDemonHunter\HeroDemonHunterAttack2.wav
 *	Units\NightElf\HeroWarden\HeroWardenYes3.wav
 *	Units\Orc\HeroBladeMaster\HeroBlademasterAttack2.wav
@@ -163,6 +165,11 @@ War3.mpq	Abilities\Weapons\ChimaeraAcidMissile\ChimaeraAcidMissile.mdx
 War3.mpq	Abilities\Weapons\CryptFiendMissile\CryptFiendMissile.mdx
 War3.mpq	Abilities\Weapons\CryptFiendMissile\CryptFiendMissileLaunch3.wav
 War3.mpq	Abilities\Weapons\DemonHunterMissile\DemonHunterMissile.mdx
+War3.mpq	Abilities\Weapons\DemonHunterMissile\DemonHunterMissileHit1.wav
+War3.mpq	Abilities\Weapons\DemonHunterMissile\DemonHunterMissileHit2.wav
+War3.mpq	Abilities\Weapons\DemonHunterMissile\DemonHunterMissileHit3.wav
+War3.mpq	Abilities\Weapons\DemonHunterMissile\HeroDemonMissileLaunch1.wav
+War3.mpq	Abilities\Weapons\DemonHunterMissile\HeroDemonMissileLaunch2.wav
 War3.mpq	Abilities\Weapons\DragonHawkMissile\DragonHawkMissile.mdx
 War3.mpq	Abilities\Weapons\DruidoftheTalonMissile\DruidoftheTalonMissile.mdx
 War3.mpq	Abilities\Weapons\DruidoftheTalonMissile\DruidOfTheTalonMissileHit1.wav
@@ -1735,6 +1742,7 @@ War3.mpq	Units\NightElf\Ent\EntReady1.wav
 War3.mpq	Units\NightElf\Ent\EntWhat1.wav
 War3.mpq	Units\NightElf\Ent\EntYes1.wav
 War3.mpq	units\NightElf\Ent\GoodEnt.blp
+War3.mpq	Units\NightElf\HeroDemonHunter\DemonHunterMorph1.wav
 War3.mpq	units\nightelf\HeroDemonHunter\HeroDemonHunter.mdx
 War3.mpq	units\nightelf\HeroDemonHunter\HeroDemonHunter_Portrait.mdx
 War3.mpq	Units\NightElf\HeroDemonHunter\HeroDemonHunterAttack1.wav
@@ -2259,9 +2267,12 @@ War3Local.mpq	Units\Undead\Necromancer\NecromancerYes2.wav
 War3Local.mpq	Units\Undead\Necromancer\NecromancerYes3.wav
 War3Local.mpq	Units\Undead\Necromancer\NecromancerYes4.wav
 War3x.mpq	A.mpq
+War3x.mpq	Abilities\Spells\Human\FlameStrike\FlameStrike.mdx
+War3x.mpq	Abilities\Spells\Human\FlameStrike\FlameStrikeBirth1.wav
 War3x.mpq	Abilities\Spells\Human\FlameStrike\FlameStrikeTarget.mdx
 War3x.mpq	Abilities\Spells\Human\FlameStrike\FlameStrikeTargetWaveNonLoop1.wav
 War3x.mpq	Abilities\Spells\Human\FlameStrike\MegaBlastTail.blp
+War3x.mpq	Abilities\Spells\Human\FlameStrike\White1_star5tga.blp
 War3x.mpq	Abilities\Spells\Human\ManaFlare\ManaFlareBoltImpact.mdx
 War3x.mpq	Abilities\Spells\Human\ManaFlare\ManaFlareMissile.mdx
 War3x.mpq	Abilities\Spells\Human\ManaFlare\ManaFlareStrike.wav
@@ -2489,6 +2500,7 @@ War3x.mpq	Objects\InventoryItems\treasurechest\treasurechest.blp
 War3x.mpq	Objects\InventoryItems\TreasureChest\treasurechest.mdx
 War3x.mpq	Objects\Spawnmodels\Critters\Albatross\CritterBloodAlbatross.mdx
 War3x.mpq	Objects\Spawnmodels\Human\HumanBlood\HeroBloodElfBlood.mdx
+War3x.mpq	Objects\Spawnmodels\Human\SmallFlameSpawn\SmallFlameSpawn.mdx
 War3x.mpq	Objects\Spawnmodels\Other\ToonBoom\swirl1.blp
 War3x.mpq	Objects\Spawnmodels\Other\ToonBoom\ToonBoom.mdx
 War3x.mpq	PathTextures\2x2Cyan.tga
@@ -2660,6 +2672,7 @@ War3x.mpq	Textures\Clouds8x8Fade.blp
 War3x.mpq	Textures\Clouds8x8Fire.blp
 War3x.mpq	Textures\Clouds8x8Mod.blp
 War3x.mpq	Textures\Clouds8x8ModBlight.blp
+War3x.mpq	Textures\Clouds8x8ModFire.blp
 War3x.mpq	Textures\clouds_anim1.blp
 War3x.mpq	Textures\clouds_anim1_bw.blp
 War3x.mpq	Textures\CloudSingle.blp
@@ -2797,6 +2810,7 @@ War3x.mpq	Textures\WaterWake2.blp
 War3x.mpq	Textures\WaterWake3.blp
 War3x.mpq	Textures\White_64_Foam1.blp
 War3x.mpq	Textures\Yellow_Glow.blp
+War3x.mpq	Textures\Yellow_Glow2.blp
 War3x.mpq	Textures\Yellow_Glow3.blp
 War3x.mpq	Textures\Yellow_Glow_Dim.blp
 War3x.mpq	Textures\Yellow_Star.blp
@@ -2977,6 +2991,13 @@ War3x.mpq	units\Human\HeroPaladin\Heropaladin.blp
 War3x.mpq	units\human\HeroPaladin\HeroPaladin_Portrait.mdx
 War3x.mpq	units\human\Kael\Kael.mdx
 War3x.mpq	units\human\Kael\Kael_Portrait.mdx
+War3x.mpq	Units\Human\Phoenix\Egg1.blp
+War3x.mpq	Units\Human\Phoenix\Phoenix.mdx
+War3x.mpq	Units\Human\Phoenix\Phoenix2.blp
+War3x.mpq	Units\Human\Phoenix\Phoenix_Portrait.mdx
+War3x.mpq	Units\Human\Phoenix\PhoenixPortrait.blp
+War3x.mpq	Units\Human\Phoenix\RibbonNE1_Red.blp
+War3x.mpq	Units\Human\Phoenix\TeleportTarget.blp
 War3x.mpq	Units\HumanAbilityFunc.txt
 War3x.mpq	Units\HumanUnitFunc.txt
 War3x.mpq	Units\HumanUpgradeFunc.txt
@@ -3076,6 +3097,7 @@ War3x.mpq	W.mpq
 War3x.mpq	X.mpq
 War3x.mpq	Z.mpq
 War3xLocal.mpq	Fonts\FRIZQT__.TTF
+War3xLocal.mpq	Fonts\NIM_____.ttf
 War3xLocal.mpq	Fonts\THOWR___.TTF
 War3xLocal.mpq	Sound\Music\mp3Music\BloodElfTheme.mp3
 War3xLocal.mpq	UI\FrameDef\GlobalStrings.fdf
@@ -3428,4 +3450,3 @@ War3xLocal.mpq	Units\UndeadAbilityStrings.txt
 War3xLocal.mpq	Units\UndeadUnitStrings.txt
 War3xLocal.mpq	Units\UndeadUpgradeStrings.txt
 War3xLocal.mpq	Units\UnitGlobalStrings.txt
-War3xLocal.mpq	Fonts\NIM_____.ttf

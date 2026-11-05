@@ -85,12 +85,16 @@ function IsTerrainPathable() return false end
 function FogEnable() end
 function FogMaskEnable() end
 function SuspendTimeOfDay() end
-function SetMusicVolume(v) int('SetMusicVolume', v) end
+function SetMusicVolume(v) int('SetMusicVolume', v); MOCK.musicVolume = v end
 function ClearMapMusic() end
 function StopMusic(fade) assert(type(fade) == 'boolean') end
 function PlayMusic(s) assert(type(s) == 'string' and not s:find('\\\\', 1, true)); MOCK.music = s end
 function GetUnitState(u, state) return (state == UNIT_STATE_MANA or state == UNIT_STATE_MAX_MANA) and 300 or 0 end
-function VolumeGroupSetVolume(group, v) assert(type(v) == 'number', 'VolumeGroupSetVolume expects a number') end
+function VolumeGroupSetVolume(group, v)
+    assert(type(v) == 'number', 'VolumeGroupSetVolume expects a number')
+    MOCK.groupVolume = MOCK.groupVolume or {}
+    MOCK.groupVolume[group] = v
+end
 function SetFloatGameState() end
 function SetTerrainFogEx(style, a, b, c, r, g, bl) assert(type(bl) == 'number') end
 function ResetTerrainFog() end
@@ -258,9 +262,9 @@ function MOCK.liveTags()
     end
     return live
 end
-function SetTextTagText(t, s) assert(type(s) == 'string') end
+function SetTextTagText(t, s) assert(type(s) == 'string'); t.text = s end
 function SetTextTagPos() end
-function SetTextTagColor(t, r, g, b, a) int('SetTextTagColor', r) end
+function SetTextTagColor(t, r, g, b, a) int('SetTextTagColor', r); t.g = g end
 function SetTextTagVelocity() end
 function SetTextTagPermanent(t, on) t.permanent = on end
 function SetTextTagLifespan() end
@@ -446,7 +450,7 @@ function MOCK.order(u, x, y)
 end
 
 -- Sounds by label (spells whose art is silent).
-function CreateSoundFromLabel(label, looping, is3D) assert(type(label) == 'string'); return handle('sound', {label = label}) end
+function CreateSoundFromLabel(label, looping, is3D) assert(type(label) == 'string'); return handle('sound', {label = label, is3D = is3D}) end
 function SetSoundPosition(snd, x, y, z) assert(type(x) == 'number' and type(y) == 'number') end
-function StartSound(snd) MOCK.sounds = (MOCK.sounds or 0) + 1 end
+function StartSound(snd) MOCK.sounds = (MOCK.sounds or 0) + 1; MOCK.lastSound = snd end
 function KillSoundWhenDone() end

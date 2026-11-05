@@ -38,7 +38,8 @@ downloads about 200 mb of game data, once.
 - **Cards in World of Warcraft rarities**, from Common to Legendary. Rarity adds power to the
   card when you pick it. A card can be a new spell, a higher rank for one you have, or a
   **blessing**: a stat card any hero can draw, which takes no spell slot.
-- **Nothing has a rank limit.** Four spell slots, as many ranks as you can afford.
+- **Almost nothing has a rank limit.** Four spell slots, as many ranks as you can afford. Only extra
+  projectiles stop, at +6.
 - **Reroll and banish** the cards you do not want. Perks in the lobby add more rerolls, banishes,
   and skips.
 - **Blessings:** Might, Vitality, Swiftness, Haste, Wisdom, Greed, Magnetism, Precision,

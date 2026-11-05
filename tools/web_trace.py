@@ -49,6 +49,12 @@ APPDATA = pathlib.Path(os.environ.get("APPDATA", "")) / "warcraft-3"
 SAVED = [APPDATA / "CustomMapData" / "WarcraftSurvivors" / "profile.pld", APPDATA / "config.cfg"]
 SCRIPTS = "Scripts/Survivor/ashenvale_survivor.lua,Scripts/Survivor/engine_boot.lua"
 MENU_MAP = "Maps/FrozenThrone/(6)Moonglade.w3x"
+# Sounds no session reaches. The first two are keyed in a hero model's form clips: in
+# a zone session another hero casts the spell (no Morph clip), and none dies in demon
+# form. The last is the click on every button and card: no session clicks with the mouse.
+UNTRACED_SOUNDS = [r"Units\NightElf\HeroDemonHunter\DemonHunterMorph1.wav",
+                   r"Units\NightElf\HeroDemonHunter\DemonHunterDeathAlternate1.wav",
+                   r"Sound\Interface\BigButtonClick.wav"]
 
 
 def script_data():
@@ -131,7 +137,7 @@ end
 
 def plan(data, seconds):
     heroes, zones, maps, _ = script_data()
-    common = ["-data", data, "-tft", "+set", "vid_hidden", "1", "+set", "s_volume", "0",
+    common = ["-data", data, "-tft", "+set", "vid_hidden", "1", "+set", "survivor_mute", "1",
               "+set", "com_maxfps", "30", "+set", "com_maxfps_background", "30",
               "+set", "survivor_autopick", "1"]
     half = len(zones)
@@ -292,6 +298,7 @@ def reads(args):
     lines.update("*\t" + upper[name] for name in misses if name in upper and name not in known)
     lines.update("*\t" + name for name in sound_variants(known, listed) if name.upper() not in known)
     lines.update("*\tSound\\Music\\mp3Music\\%s.mp3" % m for m in script_data()[3])
+    lines.update("*\t" + name for name in UNTRACED_SOUNDS if name.upper() not in known)
     # Every asset path written out in the script (effects, banners, loading art).
     src = (ROOT / "src" / "ashenvale_survivor.lua").read_text(encoding="utf-8")
     for raw in re.findall(r"'((?:[^'\\\n]|\\\\)+\.(?:blp|mdx|mdl|wav|mp3|tga))'", src, re.I):

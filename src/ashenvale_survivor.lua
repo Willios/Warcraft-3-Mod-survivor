@@ -301,13 +301,23 @@ do
         MAX_PICKUPS = 220,
         SPELL_SLOTS = 4,             -- spells and blessings have no rank limit
         MAX_SUMMONS = 120,           -- pets alive at once (Persistence stacks them up)
-        MAX_WORLD_OBJECTS = 6,       -- chests, shrines and treasure lying in the arena at once
+        MAX_WORLD_OBJECTS = 8,       -- chests, shrines and treasure lying in the arena at once
         WORLD_OBJECT_REACH = 150.0,  -- walking this close to one uses it
+        WORLD_OBJECT_EVERY_MIN = 25.0, -- seconds between two new objects
+        WORLD_OBJECT_EVERY_MAX = 35.0,
+        WORLD_OBJECT_NEAR_MIN = 700.0, -- new objects appear this far from the hero
+        WORLD_OBJECT_NEAR_MAX = 1400.0,
+        SHRINE_TIME = 10.0,          -- clear seconds a Shrine of Protection needs
+        SHRINE_RADIUS = 230.0,       -- no enemy may stand this close to it
+        SHRINE_LIMIT = 30.0,         -- seconds before an unfinished shrine falls silent
         HIT_FEEDBACK = 0.2,          -- seconds between two blood splashes on the hero
         HAND_SIZE = 3,
         BASE_PICKUP = 170.0,
         BASE_REROLLS = 2,
         BASE_BANISHES = 1,
+        MAX_MULTISHOT = 6,           -- extra projectiles at most, from every source
+        LIFESTEAL_RATE = 0.5,        -- life steal heals at most (its percent x this) of max health per second...
+        LIFESTEAL_MAX = 0.10,        -- ...and never more than this: damage to a whole horde cannot outheal everything
         XP_RATE = 2,                 -- experience per gem point, as in the original
         CAMERA_DISTANCE = 1850.0,
         DAMAGE_NUMBERS = true,
@@ -362,8 +372,10 @@ do
         stormBolt = 'Abilities\\Spells\\Human\\StormBolt\\StormBoltMissile.mdl',
         holyLight = 'Abilities\\Spells\\Human\\HolyBolt\\HolyBoltSpecialArt.mdl',
         flameStrike = 'Abilities\\Spells\\Human\\FlameStrike\\FlameStrikeTarget.mdl',
+        flameStrikeFire = 'Abilities\\Spells\\Human\\FlameStrike\\FlameStrike.mdl',
         divineShield = 'Abilities\\Spells\\Human\\DivineShield\\DivineShieldTarget.mdl',
         avatar = 'Abilities\\Spells\\Human\\Avatar\\AvatarCaster.mdl',
+        demonMissile = 'Abilities\\Weapons\\DemonHunterMissile\\DemonHunterMissile.mdl',
         manaShield = 'Abilities\\Spells\\Human\\ManaShield\\ManaShieldCaster.mdl',
         resurrect = 'Abilities\\Spells\\Human\\Resurrect\\ResurrectTarget.mdl',
         teleport = 'Abilities\\Spells\\Human\\MassTeleport\\MassTeleportCaster.mdl',
@@ -425,7 +437,7 @@ do
         fireball = 'Abilities\\Weapons\\FireBallMissile\\FireBallMissile.mdl',
         arcane = 'Abilities\\Weapons\\FaerieDragonMissile\\FaerieDragonMissile.mdl',
         spirit = 'Abilities\\Weapons\\SpiritOfVengeanceMissile\\SpiritOfVengeanceMissile.mdl',
-        phoenix = 'Abilities\\Weapons\\PhoenixMissile\\Phoenix_Missile.mdl',
+        phoenix = 'Units\\Human\\Phoenix\\Phoenix.mdl',
         cryptFiend = 'Abilities\\Weapons\\CryptFiendMissile\\CryptFiendMissile.mdl',
         hex = 'Abilities\\Spells\\Orc\\Purge\\PurgeBuffTarget.mdl',
         bolt = 'Abilities\\Weapons\\Bolt\\BoltImpact.mdl',
@@ -645,7 +657,7 @@ do
         apply = function(s, v) s.dr = s.dr + v.amount end,
         desc = 'The shield shocks enemies within {radius} for {dmg} damage every second. Takes {pct}\037 less damage.'})
     spell('flame_strike', {name = 'Flame Strike', code = 'AHfs', icon = 'BTNWallOfFire', kind = 'zone', cd = 6.0, dmg = 26,
-        radius = 220, range = 900, delay = 0.5, waves = 5, interval = 0.5, spread = 1, fx = FX.flameStrike,
+        radius = 220, range = 900, delay = 0.5, waves = 5, interval = 0.5, spread = 1, fx = FX.flameStrike, impactFx = FX.flameStrikeFire,
         desc = 'Engulfs the densest pack in flames: {waves} bursts of {dmg} damage within {radius}.'})
     spell('banish', {name = 'Banish', code = 'AHbn', icon = 'BTNBanish', kind = 'bolt', cd = 3.0, dmg = 55, count = 1,
         countEvery = 2, range = 800, instant = true, impact = FX.manaBurn, slow = 0.5, slowDur = 2.5,
@@ -676,7 +688,7 @@ do
     spell('war_stomp', {name = 'War Stomp', code = 'AOws', icon = 'BTNWarStomp', kind = 'nova', cd = 6.0, dmg = 40,
         radius = 280, fx = FX.warStomp, stun = 1.2,
         desc = 'Stomps for {dmg} damage within {radius}, stunning enemies for {stun} sec.'})
-    spell('devotion_aura', {flat = true, name = 'Devotion Aura', code = 'AHad', icon = 'BTNDevotion', kind = 'aura', per = 1,
+    spell('devotion_aura', {flat = true, name = 'Devotion Aura', code = 'AHad', icon = 'BTNDevotion', kind = 'aura', per = 2,
         interval = 1.0, dmg = 11, radius = 240, fx = FX.holyLight, attach = 'Abilities\\Spells\\Human\\DevotionAura\\DevotionAura.mdl',
         apply = function(s, v) s.armor = s.armor + v.amount end,
         desc = 'Holy light burns enemies within {radius} for {dmg} damage every second. Grants {pct} armor.'})
@@ -725,7 +737,7 @@ do
     spell('mirror_image', {name = 'Mirror Image', code = 'AOmi', icon = 'BTNMirrorImage', kind = 'nova', cd = 6.0, dmg = 50,
         radius = 260, fx = FX.mirrorImage, images = true,
         desc = 'Splits into images that slash every enemy within {radius} for {dmg} damage.'})
-    spell('endurance_aura', {name = 'Endurance Aura', code = 'AOae', icon = 'BTNCommand', kind = 'aura', per = 0.015,
+    spell('endurance_aura', {name = 'Endurance Aura', code = 'AOae', icon = 'BTNCommand', kind = 'aura', per = 0.03,
         interval = 1.0, dmg = 12, radius = 240, fx = FX.cleave,
         apply = function(s, v) s.move = s.move + v.amount; s.attackSpeed = s.attackSpeed + v.amount end,
         desc = 'Nearby enemies within {radius} take {dmg} damage every second. +{pct}\037 movement and attack speed.'})
@@ -736,7 +748,7 @@ do
     spell('shockwave', {name = 'Shockwave', code = 'AOsh', icon = 'BTNShockWave', kind = 'line', cd = 3.5, dmg = 55,
         count = 1, countEvery = 2, range = 900, width = 130, speed = 1050, missile = FX.shockwave,
         desc = 'Sends {count} shockwave through enemies in a line for {dmg} damage.'})
-    spell('evasion', {name = 'Evasion', code = 'AEev', icon = 'BTNEvasion', kind = 'passive', per = 0.015,
+    spell('evasion', {name = 'Evasion', code = 'AEev', icon = 'BTNEvasion', kind = 'passive', per = 0.03,
         apply = function(s, v) s.dodge = s.dodge + v.amount end, desc = '{pct}\037 chance to dodge attacks.'})
     spell('feral_spirit', {name = 'Feral Spirit', code = 'AOsf', icon = 'BTNSpiritWolf', kind = 'summon', cd = 15.0, 
         count = 2, countEvery = 2, units = {'osw1', 'osw1', 'osw2', 'osw2', 'osw3'}, dmg = 18, hp = 300, birth = FX.feralSpirit,
@@ -838,8 +850,8 @@ do
         countEvery = 2, range = 800, missile = FX.arcane, speed = 1200, impact = FX.manaBurn,
         desc = 'Burns {count} enemy for {dmg} damage.'})
     spell('metamorphosis', {name = 'Metamorphosis', code = 'AEme', icon = 'BTNMetamorphosis', kind = 'buff', cd = 35.0,
-        dur = 10, per = 0.1, basePct = 0.25, trigger = 'enemies', fx = FX.avatar, scale = 1.3, dmg = 70, radius = 300,
-        burstFx = FX.immolationHit,
+        dur = 10, per = 0.1, basePct = 0.25, trigger = 'enemies', scale = 1.3, dmg = 70, radius = 300,
+        burstFx = FX.immolationHit, morph = 'alternate', morphAnim = 'morph', morphTime = 1.3, morphMissile = FX.demonMissile,
         apply = function(s, v) s.damage = s.damage + v.bonus; s.maxHp = s.maxHp + 200; s.range = s.range + 350 end,
         desc = 'Erupts into a demon for {dmg} damage within {radius}, then has +{pct2}\037 damage, +200 health and ranged attacks for {dur} sec.'})
     spell('glaive_toss', {name = 'Glaive Toss', code = 'AEbl', icon = 'BTNUpgradeMoonGlaive', kind = 'bolt', cd = 2.2, dmg = 34,
@@ -880,6 +892,7 @@ do
         countEvery = 2, dmg = 24, orbitRadius = 240, hitRadius = 85, speed = 2.2, missile = FX.moonGlaive,
         desc = '{count} glaives circle the hero, slicing enemies for {dmg} damage.'})
     spell('barrage', {flat = true, name = 'Barrage', code = 'Aroc', icon = 'BTNScatterRockets', kind = 'passive', per = 1,
+        offerWhile = function(s) return s.multishot < CFG.MAX_MULTISHOT end,
         apply = function(s, v) s.multishot = s.multishot + v.rank end,
         desc = 'Attacks and bolts fire {rank} extra projectile(s).'})
     spell('frost_arrows', {flat = true, name = 'Frost Arrows', code = 'ANfa', icon = 'BTNColdArrowsOn', kind = 'passive', per = 6,
@@ -977,7 +990,7 @@ do
         countEvery = 2, range = 900, missile = FX.manaFlare, speed = 1100, impact = FX.manaFlareHit, scale = 0.9,
         desc = 'Looses {count} bolts of arcane fire at the nearest enemies for {dmg} damage each.'})
     spell('raven_form', {name = 'Raven Form', icon = 'BTNRavenForm', kind = 'buff', cd = 18.0, dur = 6, per = 0.05,
-        basePct = 0.15, trigger = 'enemies', morph = 'alternate', fly = true, burstFx = FX.blink, dmg = 40, radius = 240,
+        basePct = 0.15, trigger = 'enemies', morph = 'alternate', morphCast = 'attack', fly = true, burstFx = FX.blink, dmg = 40, radius = 240,
         apply = function(s, v) s.move = s.move + 0.4; s.dodge = s.dodge + v.bonus end,
         desc = 'When surrounded, bursts into a raven for {dur} sec ({dmg} damage within {radius}): flies over enemies, +40\037 movement speed and +{pct2}\037 dodge.'})
     spell('enchanted_crows', {name = 'Enchanted Crows', icon = 'BTNEnchantedCrows', kind = 'orbit', count = 2, countEvery = 2,
@@ -1029,8 +1042,9 @@ do
             desc = '+{v}\037 experience', apply = function(s, x) s.xp = s.xp + x end},
         {key = 'greed', name = 'Greed', code = 'pghe', icon = 'BTNChestOfGold', per = 0.15,
             desc = '+{v}\037 gold', apply = function(s, x) s.gold = s.gold + x end},
-        {key = 'multishot', name = 'Multishot', code = 'afac', icon = 'BTNAlleriaFlute', per = 1, flat = true,
-            desc = '+{v} projectile on attacks and bolts', apply = function(s, x) s.multishot = s.multishot + math.floor(x + 0.01) end},
+        {key = 'multishot', name = 'Multishot', code = 'afac', icon = 'BTNAlleriaFlute', per = 1, flat = true, noRarity = true,
+            offerWhile = function(s) return s.multishot < CFG.MAX_MULTISHOT end,
+            desc ='+{v} projectile on attacks and bolts', apply = function(s, x) s.multishot = s.multishot + math.floor(x + 0.01) end},
         {key = 'fortune', name = 'Fortune', code = 'cnob', icon = 'BTNCirclet', per = 0.25,
             desc = '+{v}\037 chance of rarer cards', apply = function(s, x) s.luck = s.luck + x end},
         {key = 'persistence', name = 'Persistence', code = 'hval', icon = 'BTNHelmOfValor', per = 0.15,
@@ -2022,6 +2036,10 @@ do
                     BlzFrameSetEnable(frame, true)
                 end
                 action = handler.click
+                -- Every click that does something sounds (a disabled button does not).
+                if action and (handler.button == nil or handler.button.enabled) then
+                    UI.safe(UI.clickSound)
+                end
             elseif event == FRAMEEVENT_MOUSE_ENTER then
                 action = handler.enter
             elseif event == FRAMEEVENT_MOUSE_LEAVE then
@@ -2230,6 +2248,7 @@ do
             b.hover = false
             UI.paint(b)
         end)
+        UI.handlers[b.hit].button = b
         UI.moveButton(b, x, top, w, h)
         UI.paint(b)
         return b
@@ -2507,12 +2526,14 @@ do
     -- A Warcraft III sound by its label (UI\SoundInfo\AbilitySounds.slk), at a
     -- point. Most spell effect models carry their own sound; this is for the
     -- spells whose art is silent (def.sound on cast, def.waveSound per wave).
+    -- Without a point it is an interface sound: it has no place in the world,
+    -- so it also plays while the world's sounds are paused.
     -- The engine replays one handle per label; Reforged makes one per play.
     G.sounds = {}
     function G.sound(label, x, y)
         local snd = G.sounds[label]
         if snd == nil then
-            snd = CreateSoundFromLabel(label, false, true, true, 10, 10)
+            snd = CreateSoundFromLabel(label, false, x ~= nil, x ~= nil, 10, 10)
             if snd == nil then
                 return
             end
@@ -2520,11 +2541,18 @@ do
                 G.sounds[label] = snd
             end
         end
-        SetSoundPosition(snd, x, y, 50)
+        if x then
+            SetSoundPosition(snd, x, y, 50)
+        end
         StartSound(snd)
         if not Engine.active() then
             KillSoundWhenDone(snd)
         end
+    end
+
+    -- Called from UI.init's click dispatch, written above where G is declared.
+    function UI.clickSound()
+        G.sound('GlueScreenClick')
     end
 
     function G.timedFx(model, x, y, scale, duration)
@@ -2592,12 +2620,13 @@ do
 
     function G.spellValues(def, rank, power, s)
         local r = rank - 1
-        local dmgMult = (1 + 0.35 * r) * power * (1 + s.damage)
+        -- Rank and rarity add: a rare card is worth its own bonus, it does not multiply every rank before it.
+        local dmgMult = (1 + 0.35 * r + (power - 1)) * (1 + s.damage)
         local v = {rank = rank}
         v.dmg = (def.dmg or 0) * dmgMult
         v.dot = (def.dot or 0) * dmgMult
         v.impact = (def.impactDamage or 0) * dmgMult
-        v.heal = (def.heal or 0) * (1 + 0.3 * r) * power
+        v.heal = (def.heal or 0) * (1 + 0.3 * r + (power - 1))
         v.radius = (def.radius or 0) * (1 + 0.06 * r) * (1 + s.area)
         v.range = def.range or 900
         v.count = (def.count or 1) + math.floor(r / (def.countEvery or 99))
@@ -2618,7 +2647,7 @@ do
             v.dur = (def.dur or 0) * (1 + 0.1 * r) * (1 + s.duration)
         end
         v.stun = (def.stun or 0) * (1 + 0.1 * r)
-        v.amount = (def.per or 0) * rank * power
+        v.amount = (def.per or 0) * (rank + power - 1)
         v.bonus = (def.basePct or 0) + v.amount
         -- Channeled areas (Bladestorm, Blizzard, Earthquake...) last longer
         -- with spell duration: more waves at the same pace.
@@ -2652,10 +2681,13 @@ do
         return b.flat and x or x * 100
     end
 
-    -- Total of a blessing after `rank` picks at `power` (1 plus every rarity bonus so far),
-    -- so rarity multiplies the whole stack, as it does for spells.
+    -- Total of a blessing after `rank` picks at `power` (1 plus every rarity bonus so far):
+    -- each card adds its own value. A noRarity blessing (Multishot) adds the same at any rarity.
     function G.blessingTotal(b, rank, power)
-        return b.per * rank * power
+        if b.noRarity then
+            return b.per * rank
+        end
+        return b.per * (rank + power - 1)
     end
 
     function G.describeBlessing(b, x)
@@ -2686,6 +2718,7 @@ do
         s.cdr = math.min(s.cdr, 0.6)
         s.dodge = math.min(s.dodge, 0.6)
         s.dr = math.min(s.dr, 0.7)
+        s.multishot = math.min(s.multishot, CFG.MAX_MULTISHOT)
         R.stats = s
 
         local hero = R.hero
@@ -2901,6 +2934,20 @@ do
         info.dots[source] = {dps = dps, untilT = R.time + duration}
     end
 
+    -- Heals for a share of the damage dealt, up to a budget per second (CFG.LIFESTEAL_RATE).
+    function G.lifesteal(dealt)
+        local s = R.stats
+        if R.time >= (R.stealReset or 0) then
+            R.stealReset = R.time + 1
+            R.stealLeft = BlzGetUnitMaxHP(R.hero) * math.min(CFG.LIFESTEAL_MAX, s.lifesteal * CFG.LIFESTEAL_RATE)
+        end
+        local amount = math.min(dealt * s.lifesteal, R.stealLeft)
+        if amount > 0 then
+            R.stealLeft = R.stealLeft - amount
+            G.heal(amount)
+        end
+    end
+
     function G.heal(amount)
         if amount <= 0 or R.hero == nil then
             return
@@ -2941,11 +2988,16 @@ do
         protection = {name = 'Shrine of Protection', model = 'Doodads\\Ruins\\Props\\Statue\\Statue0.mdl', scale = 0.85}
     }
     local WORLD_OBJECT_KINDS = {'barrel', 'treasure', 'vein', 'chest', 'chance', 'protection', 'wealth'}
-    -- Scattered placement: the arena is split into a 4 by 4 grid, each cell is
-    -- used once per shuffle, objects keep 900 apart and 500 from the hero.
+    -- What turns up during a run, dealt like a shuffled deck: chests come
+    -- steadily and a streak of barrels cannot starve a run of them.
+    local WORLD_OBJECT_DECK = {'chest', 'chest', 'chest', 'chest', 'chance', 'chance', 'protection', 'protection',
+        'barrel', 'barrel', 'vein', 'vein', 'treasure', 'treasure', 'wealth'}
+    -- Placement: a ring around the hero, so an object is seen before it expires
+    -- (the view reaches about 1100 to the sides). Failing that, the arena's 4 by 4
+    -- grid, each cell used once per shuffle. Objects keep 700 apart and 500 from the hero.
     local WORLD_OBJECT_GRID = 4
     local WORLD_OBJECT_CELL_MARGIN = 220
-    local WORLD_OBJECT_MIN_SPACING = 900
+    local WORLD_OBJECT_MIN_SPACING = 700
     local WORLD_OBJECT_HERO_CLEARANCE = 500
     local WORLD_OBJECT_CELL_TRIES = 24
     local WORLD_OBJECT_MAP_TRIES = 96
@@ -2968,19 +3020,53 @@ do
             return
         end
         object.price = cost
+        G.setObjectTag(object, tostring(cost) .. ' gold', 0.026, -60, 210, 255, 210, 122)
+    end
+
+    -- The label over an object: a chest's price, a shrine's countdown.
+    function G.setObjectTag(object, text, size, dx, z, r, g, b)
         if object.priceTag == nil then
             object.priceTag = CreateTextTag()
         end
         if object.priceTag then
             -- Plain text in the tag's own colour: a colour code also tinted the
             -- engine's drop shadow, which then read as a second gold label.
-            SetTextTagText(object.priceTag, tostring(cost) .. ' gold', 0.026)
-            SetTextTagColor(object.priceTag, 255, 210, 122, 255)
-            SetTextTagPos(object.priceTag, object.x - 60, object.y, 210)
+            SetTextTagText(object.priceTag, text, size)
+            SetTextTagColor(object.priceTag, r, g, b, 255)
+            SetTextTagPos(object.priceTag, object.x + dx, object.y, z)
             SetTextTagVelocity(object.priceTag, 0, 0)
             SetTextTagPermanent(object.priceTag, true)
             SetTextTagVisibility(object.priceTag, true)
         end
+    end
+
+    -- A shrine's seconds left, gold while it counts, red while enemies hold it up.
+    function G.updateShrineTag(object, blocked)
+        local left = math.ceil(CFG.SHRINE_TIME - object.progress)
+        if left ~= object.tagLeft or blocked ~= object.tagBlocked then
+            object.tagLeft, object.tagBlocked = left, blocked
+            if blocked then
+                G.setObjectTag(object, tostring(left), 0.04, -14, 420, 255, 70, 50)
+            else
+                G.setObjectTag(object, tostring(left), 0.04, -14, 420, 255, 225, 110)
+            end
+        end
+    end
+
+    -- The next kind off the deck; an empty deck is shuffled again.
+    function G.nextWorldObjectKind()
+        if R.objectDeck == nil or #R.objectDeck == 0 then
+            local deck = {}
+            for i, kind in ipairs(WORLD_OBJECT_DECK) do
+                deck[i] = kind
+            end
+            for i = #deck, 2, -1 do
+                local j = GetRandomInt(1, i)
+                deck[i], deck[j] = deck[j], deck[i]
+            end
+            R.objectDeck = deck
+        end
+        return table.remove(R.objectDeck)
     end
 
     function G.updateWorldObjectPrices()
@@ -3051,11 +3137,24 @@ do
         return nil, nil
     end
 
-    -- A free point for an object: the next free cell in the shuffled order,
-    -- then any random point on the map. Returns x, y and the cell id.
+    -- A free point for an object: around the hero, then the next free cell in
+    -- the shuffled order, then any random point on the map. Returns x, y and the cell id.
     function G.spawnWorldObjectPoint()
         if R == nil then
             return nil, nil, nil
+        end
+        for _ = 1, WORLD_OBJECT_CELL_TRIES do
+            local angle = GetRandomReal(0, TWO_PI)
+            local dist = GetRandomReal(CFG.WORLD_OBJECT_NEAR_MIN, CFG.WORLD_OBJECT_NEAR_MAX)
+            local x = R.hx + math.cos(angle) * dist
+            local y = R.hy + math.sin(angle) * dist
+            if x >= G.minX + WORLD_OBJECT_CELL_MARGIN and x <= G.maxX - WORLD_OBJECT_CELL_MARGIN
+                and y >= G.minY + WORLD_OBJECT_CELL_MARGIN and y <= G.maxY - WORLD_OBJECT_CELL_MARGIN
+                and G.walkable(x, y) and G.worldObjectPositionClear(x, y) then
+                local column = U.clamp(math.floor((x - G.minX) / ((G.maxX - G.minX) / WORLD_OBJECT_GRID)), 0, WORLD_OBJECT_GRID - 1)
+                local row = U.clamp(math.floor((y - G.minY) / ((G.maxY - G.minY) / WORLD_OBJECT_GRID)), 0, WORLD_OBJECT_GRID - 1)
+                return x, y, row * WORLD_OBJECT_GRID + column + 1
+            end
         end
         if R.objectCellOrder == nil or R.objectCellCursor > #R.objectCellOrder then
             G.shuffleWorldObjectCells()
@@ -3113,17 +3212,17 @@ do
         BlzSetSpecialEffectScale(fx, def.scale)
         local glow = AddSpecialEffect(FX.objectGlow, x, y)
         local object = {kind = kind, name = def.name, x = x, y = y, fx = fx, glow = glow, active = true,
-            expires = R.time + 100, time = 0, progress = 0, nextHint = 0}
-        object.ring = G.objectRing(x, y)
+            expires = R.time + 100, progress = 0, nextHint = 0}
+        object.ring = G.objectRing(x, y, 96, 78)
         R.interactables[#R.interactables + 1] = object
         G.updateWorldObjectPrice(object)
         return object
     end
 
     -- The yellow ground ring under an object, for as long as it lies there.
-    function G.objectRing(x, y)
+    function G.objectRing(x, y, radius, inner)
         if Engine.active() and type(rawget(_G, 'EngineTelegraph')) == 'function' then
-            return EngineTelegraph({shape = 'ring', x = x, y = y, radius = 96, inner = 78, duration = 100000,
+            return EngineTelegraph({shape = 'ring', x = x, y = y, radius = radius, inner = inner, duration = 100000,
                 r = 255, g = 214, b = 60, a = 200, flash = false})
         end
         return nil
@@ -3200,10 +3299,13 @@ do
                 return
             end
             object.challenge = true
-            object.time = 18
             object.progress = 0
-            object.expires = R.time + 30
+            object.expires = R.time + CFG.SHRINE_LIMIT
             R.protectionShrine = object
+            -- The ring grows to the ground the enemies must stay off.
+            G.cancelTelegraph(object.ring)
+            object.ring = G.objectRing(object.x, object.y, CFG.SHRINE_RADIUS, CFG.SHRINE_RADIUS - 16)
+            G.updateShrineTag(object, false)
             Hud.banner(U.col('ffe680', 'Protect the shrine') .. '  -  keep enemies away from it for 10 seconds')
         else
             local ranges = {vein = {50, 100}, barrel = {15, 25}, treasure = {100, 200}, wealth = {250, 500}}
@@ -3240,26 +3342,20 @@ do
         while i <= #list do
             local object = list[i]
             if object.challenge then
-                -- Shrine of Protection: 10 s with no enemy within 230 of it,
-                -- before its 18 s run out; pressure drains the progress.
-                object.time = object.time - dt
-                if G.countInRange(object.x, object.y, 230) > 0 then
-                    object.progress = math.max(0, object.progress - dt * 2)
-                else
+                -- Shrine of Protection: the countdown over it runs while no enemy
+                -- stands in its ring and waits while one does; it never goes back up.
+                local blocked = G.countInRange(object.x, object.y, CFG.SHRINE_RADIUS) > 0
+                if not blocked then
                     object.progress = object.progress + dt
                 end
-                if R.time >= object.nextHint then
-                    object.nextHint = R.time + 2
-                    Hud.banner(U.col('ffe680', 'Protect the shrine') .. '  -  '
-                        .. math.ceil(math.max(0, 10 - object.progress)) .. ' seconds')
-                end
-                if object.progress >= 10 then
+                G.updateShrineTag(object, blocked)
+                if object.progress >= CFG.SHRINE_TIME then
                     G.addGold(100)
                     G.heal(BlzGetUnitMaxHP(R.hero) * 0.15)
                     G.fx(FX.holyLight, object.x, object.y, 1.0)
                     Hud.banner(U.col(GREEN, 'Shrine protected') .. '  -  100 gold and healing')
                     G.removeWorldObject(object)
-                elseif object.time <= 0 or R.time >= object.expires then
+                elseif R.time >= object.expires then
                     Hud.banner(U.col('bfb6a8', 'The shrine falls silent'))
                     G.removeWorldObject(object)
                 end
@@ -3271,9 +3367,9 @@ do
             end
         end
         if R.time >= R.objectClock then
-            R.objectClock = R.time + GetRandomReal(58, 78)
+            R.objectClock = R.time + GetRandomReal(CFG.WORLD_OBJECT_EVERY_MIN, CFG.WORLD_OBJECT_EVERY_MAX)
             if #list < CFG.MAX_WORLD_OBJECTS then
-                G.spawnRandomWorldObject(WORLD_OBJECT_KINDS[GetRandomInt(1, #WORLD_OBJECT_KINDS)])
+                G.spawnRandomWorldObject(G.nextWorldObjectKind())
             end
         end
     end
@@ -3347,7 +3443,7 @@ do
             R.meter[key] = (R.meter[key] or 0) + dealt
             R.damageDone = R.damageDone + dealt
             if R.stats.lifesteal > 0 then
-                G.heal(dealt * R.stats.lifesteal)
+                G.lifesteal(dealt)
             end
             -- Every hit shows its number (damage over time ticks do not).
             if CFG.DAMAGE_NUMBERS and not R.dmgTick and amount >= 1 then
@@ -3511,7 +3607,14 @@ do
         info.aura = AddSpecialEffectTarget(FX.bossAura, u, 'origin')
         info.slamAt = R.time + 5.0
         info.slamDamage = def.dmg * R.zone.power ^ 0.7 * R.diff.dmg * 2.2 * select(2, G.endlessScale())
-        R.boss = u
+        -- Test aid: +set survivor_boss_spells "sweep lanes safe" replaces every boss's kit.
+        if Engine.active() and tostring(EngineCvar('survivor_boss_spells') or '') ~= '' then
+            info.kitOverride = {}
+            for key in tostring(EngineCvar('survivor_boss_spells')):gmatch('[a-z]+') do
+                info.kitOverride[#info.kitOverride + 1] = key
+            end
+        end
+        R.bossUnits[#R.bossUnits + 1] = u
         G.fx(FX.teleport, x, y, 1.5)
         if isFinal then
             Hud.banner(U.col(RED, def.name) .. ' has come. Defeat them to win!')
@@ -3633,8 +3736,8 @@ do
                 end
             end
             if info.boss and t >= info.slamAt and not info.stunned and not info.casting then
-                info.slamAt = t + (info.final and 5.5 or 6.5)
-                G.bossCast(u, info)
+                local length = G.bossCast(u, info)
+                info.slamAt = t + math.max(G.bossPattern().every - (info.final and 1 or 0), length + 1)
             end
         end
         R.dmgTick = true
@@ -3706,71 +3809,272 @@ do
         return d <= spec.radius + pad
     end
 
-    -- Boss spells, cast in turn every few seconds (G.updateEnemies). cast: the
-    -- telegraph's duration; dmg: times the boss's slam damage. Slam lands under
-    -- the hero; cleave is a cone from the boss toward the hero; charge is a line
-    -- the boss rushes along; nova is a ring around the boss whose middle is safe.
-    -- The boss stands still while it casts the aimed ones.
+    -- Boss spells (G.updateEnemies casts them in turn). cast: how long each telegraph
+    -- fills, seconds; dmg: times the boss's slam damage per telegraph that catches the
+    -- hero; moving: the boss keeps walking while it casts (it stands still otherwise).
+    -- G.bossBuild lays out each spell as parts: {at = seconds after the start,
+    -- spec = a telegraph}, or make = a function giving the spec when its turn comes.
     G.bossSpells = {
-        slam = {cast = 1.3, dmg = 1.0},
-        cleave = {cast = 1.6, dmg = 1.1, radius = 480, arc = 80},
-        charge = {cast = 1.4, dmg = 0.9, width = 170},
-        nova = {cast = 2.0, dmg = 1.0, radius = 560, inner = 200},
-    }
-    G.bossKits = {
-        boss = {'slam', 'cleave', 'slam', 'charge'},
-        final = {'slam', 'cleave', 'nova', 'charge'},
+        slam = {cast = 1.3, dmg = 1.0, moving = true},    -- a circle under the hero
+        stomp = {cast = 1.5, dmg = 1.0},                  -- a circle around the boss: get away
+        cleave = {cast = 1.6, dmg = 1.1},                 -- a cone toward the hero
+        charge = {cast = 1.4, dmg = 0.9},                 -- a line the boss rushes along
+        nova = {cast = 2.0, dmg = 1.0},                   -- a ring around the boss: its middle is safe
+        volley = {cast = 1.4, dmg = 0.6, moving = true},  -- circles scattered around the hero
+        chase = {cast = 1.0, dmg = 0.5, moving = true},   -- circles landing where the hero is, one after another
+        fan = {cast = 1.5, dmg = 1.0},                    -- three cones with safe gaps between them
+        cross = {cast = 1.6, dmg = 0.9},                  -- four beams from the boss
+        ripple = {cast = 1.2, dmg = 0.8},                 -- rings going outward: step in behind a wave
+        sweep = {cast = 1.0, dmg = 0.7},                  -- a beam turning around the boss
+        lanes = {cast = 1.2, dmg = 0.8},                  -- parallel strips, then the strips between them
+        star = {cast = 1.4, dmg = 0.9},                   -- four beams, then four more between them
+        safe = {cast = 2.2, dmg = 1.3},                   -- everything burns except one spot: run to it
     }
 
+    local function bossBeams(c, first, count, at, parts)
+        for i = 0, count - 1 do
+            parts[#parts + 1] = {at = at, spec = {shape = 'line', x = c.bx, y = c.by, angle = first + i * 360 / count,
+                length = 1100, width = 140}}
+        end
+        return parts
+    end
+
+    G.bossBuild = {
+        slam = function(c)
+            return {{spec = {shape = 'circle', x = c.hx, y = c.hy, radius = 240}}}
+        end,
+        stomp = function(c)
+            return {{spec = {shape = 'circle', x = c.bx, y = c.by, radius = 380}}}
+        end,
+        cleave = function(c)
+            return {{spec = {shape = 'cone', x = c.bx, y = c.by, angle = c.facing, radius = 480, arc = 80}}}
+        end,
+        charge = function(c)
+            return {{spec = {shape = 'line', x = c.bx, y = c.by, angle = c.facing, length = math.min(c.dist + 250, 1000), width = 170}}}
+        end,
+        nova = function(c)
+            return {{spec = {shape = 'ring', x = c.bx, y = c.by, radius = 560, inner = 200}}}
+        end,
+        volley = function(c)
+            local parts = {{spec = {shape = 'circle', x = c.hx, y = c.hy, radius = 150}}}
+            for i = 1, 5 do
+                local a = math.rad(i * 72 + GetRandomReal(0, 40))
+                local d = GetRandomReal(180, 520)
+                parts[#parts + 1] = {at = i * 0.12, spec = {shape = 'circle', x = c.hx + math.cos(a) * d, y = c.hy + math.sin(a) * d, radius = 150}}
+            end
+            return parts
+        end,
+        chase = function()
+            local parts = {}
+            for i = 0, 4 do
+                parts[#parts + 1] = {at = i * 0.55, make = function()
+                    return {shape = 'circle', x = R.hx, y = R.hy, radius = 170}
+                end}
+            end
+            return parts
+        end,
+        fan = function(c)
+            local parts = {}
+            for i = -1, 1 do
+                parts[#parts + 1] = {spec = {shape = 'cone', x = c.bx, y = c.by, angle = c.facing + i * 50, radius = 640, arc = 34}}
+            end
+            return parts
+        end,
+        cross = function(c)
+            return bossBeams(c, c.facing, 4, 0, {})
+        end,
+        star = function(c)
+            return bossBeams(c, c.facing + 45, 4, 1.1, bossBeams(c, c.facing, 4, 0, {}))
+        end,
+        ripple = function(c)
+            return {{spec = {shape = 'circle', x = c.bx, y = c.by, radius = 280}},
+                {at = 0.7, spec = {shape = 'ring', x = c.bx, y = c.by, radius = 560, inner = 280}},
+                {at = 1.4, spec = {shape = 'ring', x = c.bx, y = c.by, radius = 840, inner = 560}}}
+        end,
+        sweep = function(c)
+            local parts = {}
+            local turn = GetRandomInt(0, 1) * 2 - 1
+            for i = 0, 8 do
+                parts[#parts + 1] = {at = i * 0.25, spec = {shape = 'line', x = c.bx, y = c.by,
+                    angle = c.facing + turn * (i * 30 - 120), length = 1000, width = 160}}
+            end
+            return parts
+        end,
+        lanes = function(c)
+            local a = math.rad(c.facing)
+            local ca, sa = math.cos(a), math.sin(a)
+            local parts = {}
+            local shift = GetRandomReal(-120, 120)
+            for wave = 0, 1 do
+                for i = -2, 2 do
+                    local off = shift + i * 360 + wave * 180
+                    parts[#parts + 1] = {at = wave * 1.1, spec = {shape = 'line', angle = c.facing, length = 1500, width = 180,
+                        x = c.hx - ca * 750 - sa * off, y = c.hy - sa * 750 + ca * off}}
+                end
+            end
+            return parts
+        end,
+        safe = function(c)
+            for _ = 1, 16 do
+                local a = GetRandomReal(0, TWO_PI)
+                local d = GetRandomReal(350, 520)
+                local x, y = c.hx + math.cos(a) * d, c.hy + math.sin(a) * d
+                if G.walkable(x, y) then
+                    return {{spec = {shape = 'ring', x = x, y = y, radius = 1500, inner = 230}}}
+                end
+            end
+            -- Walled in on every side: no spot to run to, so the middle of a nova instead.
+            return G.bossBuild.nova(c)
+        end,
+    }
+
+    -- What each zone's bosses do, by the zone's place in the play order: every zone
+    -- brings one new spell and drops an easy one, and the telegraphs fill faster.
+    -- boss: the zone's bosses, in turn; final: its final boss; scale: telegraph
+    -- times; every: seconds from one spell's start to the next (at least the spell
+    -- plus a second); the final boss casts a second sooner.
+    G.bossPatterns = {
+        {scale = 1.25, every = 8.0, boss = {'slam', 'cleave'}, final = {'slam', 'cleave', 'stomp'}},                         -- Ashenvale
+        {scale = 1.2, every = 7.5, boss = {'slam', 'cleave', 'charge'}, final = {'slam', 'cleave', 'charge', 'stomp'}},      -- Westfall
+        {scale = 1.15, every = 7.0, boss = {'stomp', 'cleave', 'slam', 'charge'}, final = {'stomp', 'cleave', 'nova', 'charge'}}, -- Tirisfal Glades
+        {scale = 1.1, every = 6.5, boss = {'volley', 'cleave', 'stomp', 'charge'}, final = {'volley', 'nova', 'cleave', 'charge'}}, -- The Barrens
+        {scale = 1.05, every = 6.5, boss = {'fan', 'volley', 'charge', 'stomp'}, final = {'fan', 'volley', 'nova', 'chase'}}, -- Stranglethorn Vale
+        {scale = 1.0, every = 6.0, boss = {'chase', 'fan', 'nova', 'volley'}, final = {'chase', 'fan', 'nova', 'cross'}},    -- Plaguelands
+        {scale = 0.95, every = 6.0, boss = {'cross', 'chase', 'charge', 'fan'}, final = {'cross', 'chase', 'ripple', 'fan'}}, -- Alterac Valley
+        {scale = 0.9, every = 5.5, boss = {'ripple', 'cross', 'volley', 'charge'}, final = {'ripple', 'cross', 'sweep', 'chase'}}, -- Felwood
+        {scale = 0.88, every = 5.5, boss = {'sweep', 'ripple', 'chase', 'cross'}, final = {'sweep', 'ripple', 'lanes', 'cross'}}, -- Dalaran
+        {scale = 0.85, every = 5.0, boss = {'lanes', 'sweep', 'volley', 'charge'}, final = {'lanes', 'sweep', 'safe', 'chase'}}, -- Hellfire Peninsula
+        {scale = 0.8, every = 5.0, boss = {'safe', 'lanes', 'ripple', 'chase', 'sweep'}, final = {'safe', 'star', 'lanes', 'sweep', 'ripple'}}, -- The Black Temple
+        {scale = 0.75, every = 4.5, boss = {'safe', 'star', 'sweep', 'chase', 'lanes', 'ripple'},                            -- Northrend
+            final = {'safe', 'star', 'lanes', 'sweep', 'safe', 'ripple', 'chase'}},
+    }
+
+    function G.bossPattern()
+        return G.bossPatterns[R.zone.rank] or G.bossPatterns[#G.bossPatterns]
+    end
+
+    -- Draws a boss telegraph and remembers it: a pause stops the game's clock, but
+    -- the client draws a telegraph on its own time (see G.pauseBossTelegraphs).
+    function G.bossTelegraph(info, spec)
+        local entry = {info = info, spec = spec, endsAt = R.time + spec.duration}
+        entry.id = G.telegraph(spec)
+        R.bossTelegraphs[entry] = true
+        return entry
+    end
+
+    -- A pause takes the warnings away; the end of the pause draws them again with
+    -- the time they have left, so a hit never lands with nothing on the ground.
+    function G.pauseBossTelegraphs(paused)
+        for entry in pairs(R.bossTelegraphs) do
+            if paused and entry.id then
+                G.cancelTelegraph(entry.id)
+                entry.id = nil
+            elseif not paused and entry.id == nil and entry.endsAt > R.time then
+                local spec = {}
+                for k, v in pairs(entry.spec) do
+                    spec[k] = v
+                end
+                spec.duration = entry.endsAt - R.time
+                entry.id = G.telegraph(spec)
+            end
+        end
+    end
+
+    function G.cancelBossTelegraphs(info)
+        for entry in pairs(R.bossTelegraphs) do
+            if entry.info == info then
+                G.cancelTelegraph(entry.id)
+                R.bossTelegraphs[entry] = nil
+            end
+        end
+    end
+
+    function G.bossHit(u, info, spell)
+        -- Overlapping telegraphs count once: a pattern can catch the hero, not stack on it.
+        if R.time >= (info.hitAt or 0) then
+            info.hitAt = R.time + 0.35
+            UnitDamageTarget(u, R.hero, info.slamDamage * spell.dmg, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+        end
+    end
+
+    -- Casts the next spell of the boss's kit; returns how long it takes.
     function G.bossCast(u, info)
-        local kit = info.final and G.bossKits.final or G.bossKits.boss
+        local pattern = G.bossPattern()
+        local kit = info.kitOverride or (info.final and pattern.final or pattern.boss)
         info.kitStep = math.fmod(info.kitStep or 0, #kit) + 1
         local key = kit[info.kitStep]
         local spell = G.bossSpells[key]
         local bx, by = GetUnitX(u), GetUnitY(u)
         local hx, hy = R.hx, R.hy
-        local facing = math.deg(math.atan(hy - by, hx - bx))
-        local spec
-        if key == 'cleave' then
-            spec = {shape = 'cone', x = bx, y = by, angle = facing, radius = spell.radius, arc = spell.arc}
-        elseif key == 'charge' then
-            local dist = math.sqrt((hx - bx) * (hx - bx) + (hy - by) * (hy - by))
-            spec = {shape = 'line', x = bx, y = by, angle = facing, length = math.min(dist + 250, 1000), width = spell.width}
-        elseif key == 'nova' then
-            spec = {shape = 'ring', x = bx, y = by, radius = spell.radius, inner = spell.inner}
-        else
-            spec = {shape = 'circle', x = hx, y = hy, radius = 240}
-        end
-        spec.duration = spell.cast
-        info.telegraph = G.telegraph(spec)
-        local rooted = key ~= 'slam'
-        if rooted then
-            info.casting = true
-            BlzSetUnitFacingEx(u, facing)
-            G.updateHeld(u, info)
-        end
+        local c = {bx = bx, by = by, hx = hx, hy = hy, facing = math.deg(math.atan(hy - by, hx - bx)),
+            dist = math.sqrt((hx - bx) * (hx - bx) + (hy - by) * (hy - by))}
+        local parts = G.bossBuild[key](c)
+        local cast = spell.cast * pattern.scale
+        local total = 0
         local run = R
-        G.after(spell.cast, function()
-            if R ~= run or R.enemies[u] == nil then
-                return
-            end
-            info.telegraph = nil
-            if rooted then
-                info.casting = false
-                G.updateHeld(u, info)
-            end
-            G.bossImpact(u, info, key, spec)
-            if spec.shape ~= 'line' and G.inTelegraph(spec, R.hx, R.hy) then
-                UnitDamageTarget(u, R.hero, info.slamDamage * spell.dmg, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
-            end
-        end)
+        for _, part in ipairs(parts) do
+            local at = (part.at or 0) * pattern.scale
+            total = math.max(total, at + cast)
+            G.after(at, function()
+                if R ~= run or R.enemies[u] == nil then
+                    return
+                end
+                local spec = part.spec or part.make()
+                spec.duration = cast
+                local entry = G.bossTelegraph(info, spec)
+                G.after(cast, function()
+                    if R ~= run then
+                        return
+                    end
+                    R.bossTelegraphs[entry] = nil
+                    if R.enemies[u] == nil then
+                        return
+                    end
+                    G.bossImpact(u, info, key, spec)
+                    if key ~= 'charge' and G.inTelegraph(spec, R.hx, R.hy) then
+                        G.bossHit(u, info, spell)
+                    end
+                end)
+            end)
+        end
+        if not spell.moving then
+            info.casting = true
+            BlzSetUnitFacingEx(u, c.facing)
+            G.updateHeld(u, info)
+            G.after(total, function()
+                if R == run and R.enemies[u] then
+                    info.casting = false
+                    G.updateHeld(u, info)
+                end
+            end)
+        end
+        return total
     end
 
     -- The art of a boss spell's hit; a charge also moves the boss down its line
-    -- and hurts the hero if it is still in the way.
+    -- and hurts the hero if it is still in the way. Spells without art of their
+    -- own show it along their shape.
     function G.bossImpact(u, info, key, spec)
         local a = math.rad(spec.angle or 0)
-        if key == 'slam' then
+        if not (key == 'slam' or key == 'cleave' or key == 'nova' or key == 'charge') then
+            if spec.shape == 'circle' then
+                G.fx(FX.warStomp, spec.x, spec.y, spec.radius / 170)
+            elseif spec.shape == 'cone' then
+                for _, f in ipairs({0.4, 0.75}) do
+                    G.fx(FX.incinerate, spec.x + math.cos(a) * spec.radius * f, spec.y + math.sin(a) * spec.radius * f, 0.9)
+                end
+            elseif spec.shape == 'line' then
+                for _, f in ipairs({0.2, 0.45, 0.7, 0.95}) do
+                    G.fx(FX.stampede, spec.x + math.cos(a) * spec.length * f, spec.y + math.sin(a) * spec.length * f, 0.8)
+                end
+            elseif spec.shape == 'ring' then
+                -- Near the inner edge: a wide ring's far edge is off the screen.
+                local r = spec.inner + 110
+                for i = 0, 11 do
+                    G.fx(FX.warStomp, spec.x + r * math.cos(i * math.pi / 6), spec.y + r * math.sin(i * math.pi / 6), 0.8)
+                end
+            end
+        elseif key == 'slam' then
             G.fx(FX.warStomp, spec.x, spec.y, 1.4)
         elseif key == 'cleave' then
             SetUnitAnimation(u, 'attack slam')
@@ -3805,7 +4109,7 @@ do
                 end)
             end
             if hit then
-                UnitDamageTarget(u, R.hero, info.slamDamage * G.bossSpells.charge.dmg, false, false, ATTACK_TYPE_CHAOS, DAMAGE_TYPE_NORMAL, WEAPON_TYPE_WHOKNOWS)
+                G.bossHit(u, info, G.bossSpells.charge)
             end
         end
     end
@@ -3831,9 +4135,8 @@ do
         R.enemies[u] = nil
         R.enemyCount = R.enemyCount - 1
         G.updateHeld(u, info)
-        if info.telegraph then
-            G.cancelTelegraph(info.telegraph)
-            info.telegraph = nil
+        if info.boss then
+            G.cancelBossTelegraphs(info)
         end
         if info.aura then
             DestroyEffect(info.aura)
@@ -3893,12 +4196,10 @@ do
         if item and GetRandomReal(0, 1) < chance then
             G.lootItem(item)
         end
-        if R.boss == u then
-            R.boss = nil
-            for other, otherInfo in pairs(R.enemies) do
-                if otherInfo.boss then
-                    R.boss = other
-                end
+        for i, boss in ipairs(R.bossUnits) do
+            if boss == u then
+                table.remove(R.bossUnits, i)
+                break
             end
         end
         if info.final then
@@ -4461,6 +4762,11 @@ do
             R.spinAnim = 'attack walk stand spin'
             G.heroAnim(R.spinAnim, length)
         end
+        if def.impactFx then
+            -- Flame Strike: def.fx marks the spot until the blow lands, then one
+            -- model burns for all the waves (Death is its fade, after the last).
+            G.timedFx(def.fx, cx, cy, v.radius / 240, def.delay)
+        end
         for wave = 1, v.waves do
             G.after((def.delay or 0) + (wave - 1) * (def.interval or 0.5), function()
                 if R ~= run or R.ended then
@@ -4487,6 +4793,12 @@ do
                     return
                 end
                 local spread = def.spread or 1
+                if def.impactFx then
+                    spread = 0
+                    if wave == 1 then
+                        G.timedFx(def.impactFx, x, y, v.radius / 200, v.waves * def.interval)
+                    end
+                end
                 for _ = 1, spread do
                     local ox, oy = x, y
                     if spread > 1 then
@@ -4772,26 +5084,44 @@ do
             SetUnitVertexColor(R.hero, 255, 255, 255, def.fade)
         end
         if def.morph then
-            G.setMorph(def.morph, true)
+            G.startMorph(def, true)
         end
         G.recomputeStats()
         return true
     end
 
-    -- Raven Form: the model's Alternate sequences (the raven) take over;
-    -- its only attack is Attack Alternate, used for casts too. The current
-    -- clip is picked again at once (walk stays walk).
-    function G.setMorph(tag, on)
-        AddUnitAnimationProperties(R.hero, tag, on)
-        R.morph = on and tag or nil
+    -- A form change. Raven Form is instant, under a flash. With morphAnim the
+    -- model plays its own transformation (its sound included) on the whole
+    -- body, like a spin, and the form changes when the clip ends; the current
+    -- form picks the clip's direction (Morph, then Morph Alternate going back).
+    function G.startMorph(def, on)
+        if def.morphMissile then
+            R.missile = on and def.morphMissile or R.heroMissile
+        end
+        if def.morphAnim then
+            R.spinAnim = def.morphAnim
+            R.spinUntil = R.time + def.morphTime
+            G.heroAnim(def.morphAnim, def.morphTime)
+            R.morphEnd = {def = def, on = on, at = R.spinUntil}
+        else
+            G.setMorph(def, on)
+            G.fx(FX.blink, R.hx, R.hy, 1.0)
+        end
+    end
+
+    -- The model's Alternate sequences (raven, demon) take over. The raven's
+    -- only attack is Attack Alternate, used for casts too (morphCast). The
+    -- current clip is picked again at once (walk stays walk).
+    function G.setMorph(def, on)
+        AddUnitAnimationProperties(R.hero, def.morph, on)
+        R.morph = on and def.morph or nil
         R.attackAnim = on and 'attack' or (R.def.attackAnim or 'attack')
-        R.castAnim = on and 'attack' or R.def.castAnim
+        R.castAnim = on and def.morphCast or R.def.castAnim
         if R.upperAnim then
             R.upperAnim(R.hero, '')
         end
         R.anim = ''
         R.animLock = R.time
-        G.fx(FX.blink, R.hx, R.hy, 1.0)
     end
 
     function G.updateBuffs()
@@ -4808,7 +5138,7 @@ do
                     SetUnitVertexColor(R.hero, 255, 255, 255, 255)
                 end
                 if buff.def.morph then
-                    G.setMorph(buff.def.morph, false)
+                    G.startMorph(buff.def, false)
                 end
                 R.buffs[key] = nil
                 changed = true
@@ -5052,6 +5382,11 @@ do
     end
 
     function G.updateMovement(dt)
+        -- Before the clip below is picked, so the new form never shows the old stand.
+        if R.morphEnd and R.time >= R.morphEnd.at then
+            G.setMorph(R.morphEnd.def, R.morphEnd.on)
+            R.morphEnd = nil
+        end
         -- A right-click gave the hero a native order: cancel it, or the
         -- engine moves the hero too and the two speeds add up.
         -- (The standalone engine never starts that order: R.scriptOrders.)
@@ -5120,7 +5455,7 @@ do
                 R.anim = want
             end
         end
-        if R.moving then
+        if R.moving and not R.morphEnd then
             SetUnitTimeScale(R.hero, U.clamp(R.moveSpeed / R.baseMove, 0.8, 1.8))
         else
             SetUnitTimeScale(R.hero, 1.0)
@@ -5220,6 +5555,8 @@ do
         end
         PauseUnit(R.hero, paused)
         Hud.showWorldFrames(not paused)
+        Options.apply()
+        G.pauseBossTelegraphs(paused)
     end
 
     function G.tryOpenHand()
@@ -5371,10 +5708,11 @@ do
             rerolls = CFG.BASE_REROLLS + Profile.perk('rerolls'), banishes = CFG.BASE_BANISHES + Profile.perk('banish'),
             livesUsed = 0, invulnUntil = 0, invulnerable = false, magnetUntil = 0, tagCount = 0,
             attackClock = 0.5, spawnClock = 1.0, slowClock = 0, summonClock = 1.0, hudClock = 0,
-            rings = 0, finalAt = nil, nextElite = 75, nextBoss = 1, finalSpawned = false, boss = nil,
+            rings = 0, finalAt = nil, nextElite = 75, nextBoss = 1, finalSpawned = false, bossUnits = {}, bossTelegraphs = {},
             moving = false, anim = '', animLock = 0, spinUntil = 0, images = {},
             attackAnim = def.attackAnim or 'attack', castAnim = def.castAnim, morph = nil,
-            interactables = {}, worldChestsOpened = 0, objectClock = GetRandomReal(58, 78), hitFeedbackAt = 0}
+            interactables = {}, worldChestsOpened = 0, hitFeedbackAt = 0,
+            objectClock = GetRandomReal(CFG.WORLD_OBJECT_EVERY_MIN, CFG.WORLD_OBJECT_EVERY_MAX)}
 
         G.playMusic(zone.music)
         local f = zone.fog
@@ -5390,7 +5728,8 @@ do
         local range, missile, speed, cooldown = G.readWeapon(hero)
         R.melee = range <= 250
         R.attackRange = R.melee and 230 or U.clamp(range, 550, 700)
-        R.missile = missile ~= '' and missile or FX.arcane
+        R.heroMissile = missile ~= '' and missile or FX.arcane
+        R.missile = R.heroMissile
         R.missileSpeed = U.clamp(speed, 700, 1500)
         R.attackCooldown = U.clamp(cooldown * 0.6, 0.7, 1.3)
         R.weaponType = G.readWeaponType(hero)
@@ -5435,15 +5774,43 @@ do
                     G.learnSpell(key, 1.0)
                 end
             end
-            -- Test aid: +set survivor_boss 2 (a zone boss) or final brings it in 3 s after the start.
+            -- Test aid: +set survivor_build "pool:10:8:7:5 might:3 vigor:2" starts with those ranks (pool: the hero's
+            -- spells in order; other words: blessings). survivor_build_bonus is the rarity bonus per pick (default 0.167).
+            local buildBonus = tonumber(EngineCvar('survivor_build_bonus')) or 0.167
+            for word in tostring(EngineCvar('survivor_build') or ''):gmatch('[^ ]+') do
+                local parts = {}
+                for part in word:gmatch('[^:]+') do
+                    parts[#parts + 1] = part
+                end
+                if parts[1] == 'pool' then
+                    for i = 2, #parts do
+                        local key = def.pool[i - 1]
+                        if key and SPELLS[key] then
+                            local inst = R.spellByKey[key] or G.learnSpell(key, 1.0)
+                            inst.rank = tonumber(parts[i])
+                            inst.power = 1 + buildBonus * inst.rank
+                        end
+                    end
+                elseif BLESSING_BY_KEY[parts[1]] then
+                    local rank = tonumber(parts[2]) or 1
+                    local power = 1 + buildBonus * rank
+                    R.blessings[parts[1]] = {rank = rank, power = power,
+                        value = G.blessingTotal(BLESSING_BY_KEY[parts[1]], rank, power)}
+                    R.blessingOrder[#R.blessingOrder + 1] = parts[1]
+                end
+            end
+            G.recomputeStats()
+            -- Test aid: +set survivor_boss "2 final" (zone bosses or the final one) brings them in 3 s after the start.
             local bossAid = tostring(EngineCvar('survivor_boss') or '')
             if bossAid ~= '' then
                 G.after(3, function()
-                    local index = tonumber(bossAid)
-                    if bossAid == 'final' then
-                        G.spawnBoss(R.zone.final, true)
-                    elseif index and R.zone.bosses[index] then
-                        G.spawnBoss(R.zone.bosses[index], false)
+                    for word in bossAid:gmatch('[^ ]+') do
+                        local index = tonumber(word)
+                        if word == 'final' then
+                            G.spawnBoss(R.zone.final, true)
+                        elseif index and R.zone.bosses[index] then
+                            G.spawnBoss(R.zone.bosses[index], false)
+                        end
                     end
                 end)
             end
@@ -5501,6 +5868,8 @@ do
             R.hand = nil
             Cards.hide()
         end
+        -- Leaving from the game menu: the end screen and the lobby have their sound.
+        Options.apply()
         for u in pairs(R.enemies) do
             PauseUnit(u, true)
         end
@@ -5590,6 +5959,7 @@ do
         end
         PauseUnit(R.hero, R.paused)
         Hud.showWorldFrames(not R.paused)
+        Options.apply()
         Hud.banner(U.col(RED, 'Endless mode') .. '  -  the horde grows stronger every minute')
         G.tryOpenHand()
     end
@@ -5786,11 +6156,20 @@ do
         end
         x, top = tc(-0.15, -0.032)
         Hud.subline = UI.text(root, '', x, top, 0.3 * k, 0.014 * k, 0.0085 * k, TEXT_JUSTIFY_CENTER)
-        x, top = tc(-0.13, -0.047)
-        Hud.bossName = UI.text(root, '', x, top, 0.26 * k, 0.013 * k, 0.009 * k, TEXT_JUSTIFY_CENTER)
-        x, top = tc(-0.11, -0.062)
-        Hud.bossBar = UI.bar(root, x, top, 0.22 * k, 0.011 * k, 200, 40, 30, 0.0075 * k)
-        Hud.bossFrames = {Hud.bossName, Hud.bossBar.back, Hud.bossBar.fill, Hud.bossBar.edge, Hud.bossBar.text}
+        -- One row per living boss, oldest on top. A zone has at most five, unless
+        -- endless mode piles up more: those only count in the "+n" beside the last row.
+        Hud.bossRows = {}
+        local bossRow = 0.03
+        for i = 1, 5 do
+            local rowTop = -(i - 1) * bossRow
+            x, top = tc(-0.13, -0.047 + rowTop)
+            local name = UI.text(root, '', x, top, 0.26 * k, 0.013 * k, 0.009 * k, TEXT_JUSTIFY_CENTER)
+            x, top = tc(-0.11, -0.062 + rowTop)
+            local bar = UI.bar(root, x, top, 0.22 * k, 0.011 * k, 200, 40, 30, 0.0075 * k)
+            Hud.bossRows[i] = {name = name, bar = bar, frames = {name, bar.back, bar.fill, bar.edge, bar.text}}
+        end
+        x, top = tc(0.115, -0.062 - 4 * bossRow)
+        Hud.bossMore = UI.text(root, '', x, top, 0.03 * k, 0.011 * k, 0.009 * k)
 
         -- Zone name, top right corner.
         Hud.zoneLabel = UI.text(root, '', right - 0.012 - 0.2 * k, 0.597, 0.2 * k, 0.016 * k, 0.0095 * k, TEXT_JUSTIFY_RIGHT)
@@ -5809,6 +6188,28 @@ do
         Hud.toastText = UI.text(root, '', x, top, 0.24 * k, 0.014 * k, 0.0082 * k)
         for _, f in ipairs({toast.bg, Hud.toastIcon.frame, Hud.toastIcon.img, Hud.toastTitle, Hud.toastText}) do
             Hud.toastFrames[#Hud.toastFrames + 1] = f
+        end
+        -- The banner and the toast stay below the boss rows beyond the first.
+        Hud.alertRows = 0
+        function Hud.placeAlerts(rows)
+            if rows == Hud.alertRows then
+                return
+            end
+            Hud.alertRows = rows
+            local down = rows * bossRow
+            local px, ptop = tc(-0.3, -0.15 - down)
+            UI.place(Hud.bannerText, px, ptop, 0.6 * k, 0.03 * k)
+            px, ptop = tc(-0.145, -0.082 - down)
+            UI.place(toast.bg, px, ptop, 0.29 * k, 0.042 * k)
+            px, ptop = tc(-0.138, -0.089 - down)
+            local size = 0.028 * k
+            local pad = size * 0.09
+            UI.place(Hud.toastIcon.frame, px - pad, ptop + pad, size + pad * 2, size + pad * 2)
+            UI.place(Hud.toastIcon.img, px, ptop, size, size)
+            px, ptop = tc(-0.102, -0.087 - down)
+            UI.place(Hud.toastTitle, px, ptop, 0.24 * k, 0.015 * k)
+            px, ptop = tc(-0.102, -0.103 - down)
+            UI.place(Hud.toastText, px, ptop, 0.24 * k, 0.014 * k)
         end
 
         -- Spell slots and experience bar, bottom center, close to the edge.
@@ -6157,16 +6558,26 @@ do
             BlzFrameSetText(Hud.subline, U.col(RED, 'Defeat ' .. R.zone.final.name .. '!'))
         end
 
-        local boss = R.boss
-        local showBoss = boss ~= nil and R.enemies[boss] ~= nil
-        for _, f in ipairs(Hud.bossFrames) do
-            BlzFrameSetVisible(f, showBoss)
+        local bosses = {}
+        for _, u in ipairs(R.bossUnits) do
+            if R.enemies[u] then
+                bosses[#bosses + 1] = u
+            end
         end
-        if showBoss then
-            local life, maxLife = GetWidgetLife(boss), BlzGetUnitMaxHP(boss)
-            BlzFrameSetText(Hud.bossName, U.col('ff6050', GetUnitName(boss)))
-            UI.setBar(Hud.bossBar, life / maxLife, U.big(life) .. ' / ' .. U.big(maxLife))
+        for i, row in ipairs(Hud.bossRows) do
+            local boss = bosses[i]
+            for _, f in ipairs(row.frames) do
+                BlzFrameSetVisible(f, boss ~= nil)
+            end
+            if boss then
+                local bossLife, bossMax = GetWidgetLife(boss), BlzGetUnitMaxHP(boss)
+                BlzFrameSetText(row.name, U.col('ff6050', R.enemies[boss].boss.name))
+                UI.setBar(row.bar, bossLife / bossMax, U.big(bossLife) .. ' / ' .. U.big(bossMax))
+            end
         end
+        local shown = #Hud.bossRows
+        BlzFrameSetText(Hud.bossMore, #bosses > shown and U.col('ff6050', '+' .. (#bosses - shown)) or '')
+        Hud.placeAlerts(math.max(0, math.min(#bosses, shown) - 1))
 
         local life, maxLife = GetWidgetLife(hero), BlzGetUnitMaxHP(hero)
         UI.setBar(Hud.health, life / math.max(1, maxLife), U.big(math.max(0, life)) .. ' / ' .. U.big(maxLife))
@@ -6375,10 +6786,11 @@ do
         local list = {}
         local slotsFree = #R.spells < CFG.SPELL_SLOTS
         for _, key in ipairs(R.def.pool) do
-            if not R.banished[key] and not exclude[key] and SPELLS[key] then
+            if not exclude[key] and SPELLS[key] then
                 local inst = R.spellByKey[key]
                 if inst then
-                    if inst.def.maxRank == nil or inst.rank < inst.def.maxRank then
+                    local open = inst.def.offerWhile == nil or inst.def.offerWhile(R.stats)
+                    if open and (inst.def.maxRank == nil or inst.rank < inst.def.maxRank) then
                         list[#list + 1] = {type = 'spell', key = key, w = 4}
                     end
                 elseif slotsFree then
@@ -6387,7 +6799,7 @@ do
             end
         end
         for _, b in ipairs(BLESSINGS) do
-            if not R.banished[b.key] and not exclude[b.key] then
+            if not R.banished[b.key] and not exclude[b.key] and (b.offerWhile == nil or b.offerWhile(R.stats)) then
                 list[#list + 1] = {type = 'blessing', key = b.key, w = 1.6}
             end
         end
@@ -6534,7 +6946,8 @@ do
                 Cards.moveCard(card, x0 + (i - 1) * (CARD_W + CARD_GAP), 0.415)
                 Cards.fill(card, c)
                 Cards.showCard(card, true)
-                local canBanish = R.banishes > 0 and (c.type == 'spell' or c.type == 'blessing')
+                -- A hero has only four spells: banishing one would leave fewer for the run.
+                local canBanish = R.banishes > 0 and c.type == 'blessing'
                 UI.showButton(card.banish, R.banishes > 0)
                 UI.setLabel(card.banish, 'Banish  (' .. R.banishes .. ')')
                 UI.setEnabled(card.banish, canBanish)
@@ -6624,7 +7037,7 @@ do
             return
         end
         local c = R.hand.cards[index]
-        if c == nil or (c.type ~= 'spell' and c.type ~= 'blessing') then
+        if c == nil or c.type ~= 'blessing' then
             return
         end
         R.banishes = R.banishes - 1
@@ -6925,9 +7338,21 @@ do
         return level * level
     end
 
-    -- Pushes every saved volume to the sound system.
+    -- Pushes every saved volume to the sound system. A paused run (game menu,
+    -- cards) keeps its music and interface sounds. In the engine the world's
+    -- sounds hold their place and go on when it resumes; Reforged can only
+    -- silence their groups.
     function Options.apply()
         local master = Options.gain('master')
+        local paused = R and R.paused and not R.ended
+        local effects = paused and 0 or 1
+        -- Test aid: +set survivor_mute 1 silences a test run. A plain +set s_volume 0
+        -- does not: this function writes s_volume at boot.
+        local testMute = Engine.active() and EngineCvar('survivor_mute') == '1'
+        if Engine.active() then
+            EngineCvar('s_sound', testMute and '0' or '1')
+            EngineCvar('s_world_paused', paused and '1' or '0')
+        end
         for _, v in ipairs(VOLUMES) do
             local level = Options.gain(v.key)
             if v.key == 'master' then
@@ -6939,13 +7364,13 @@ do
             elseif Engine.active() then
                 -- Music plays outside s_volume: the master applies here.
                 if v.groups == nil then
-                    level = level * master
+                    level = testMute and 0 or level * master
                 end
                 EngineCvar(v.cvar, string.format('\037.4f', level))
             elseif v.groups == nil then
                 SetMusicVolume(math.floor(127 * level * master + 0.5))
             else
-                level = level * master
+                level = level * master * effects
                 for _, name in ipairs(v.groups) do
                     local group = rawget(_G, name)
                     if group then
@@ -8833,7 +9258,12 @@ do
             if name == 'reroll' then
                 Cards.rerollHand()
             elseif name:sub(1, 4) == 'card' then
-                Cards.pick(tonumber(name:sub(5)))
+                local index = tonumber(name:sub(5))
+                -- The key that picks a card sounds like the click that does.
+                if R.hand.cards[index] then
+                    UI.clickSound()
+                end
+                Cards.pick(index)
             end
         elseif R == nil and S.screen == 'lobby' and S.tab == 'character' and name == 'play' then
             G.startRun()

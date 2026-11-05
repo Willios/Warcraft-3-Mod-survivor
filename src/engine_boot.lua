@@ -24,8 +24,8 @@ SURVIVOR_ENGINE = {
     -- copies both into the portable build's version.json; the portable launcher
     -- compares it with the one under update (the uploaded release) and the
     -- lobby offers the newer one (Updater). Raise the version for every release.
-    version = '1.5.0',
-    notes = 'The game now speaks your language: English, French, German, Spanish, Italian, Polish and Russian. Use the language button at the top left of the lobby: all the text, spells, descriptions, hero names and voices change. Official Warcraft III names and voices are used wherever they exist, the rest is our own translation, so please tell us anything that reads wrong. The game starts in your system or browser language and restarts when you change it. This update is larger than usual because it brings the voices of every language.',
+    version = '1.7.0',
+    notes = 'EXPERIMENTAL balance update: these numbers are not final and I will keep changing them over the next updates, so please tell me how it feels. Many of you said the hero gets too strong too fast, so late-run power is cut back while the first minutes stay about the same. A card\'s rarity now adds to that card instead of multiplying everything you already picked, for spells and blessings. Multishot is +1 per card, up to +6 extra projectiles. Life steal now has a healing limit per second, so it can no longer outheal everything. Evasion, Endurance Aura and Devotion Aura were raised to fit.',
     update = 'https://warcraftsurvivor.para-bellum.eu/download/portable/',
     arenas = {
         [1] = {map = 'Maps\\FrozenThrone\\(6)Moonglade.w3x', loading = 34},   -- Ashenvale: Ashenvale tileset, Night Elf art
