@@ -16,6 +16,274 @@
 -- through printf and crashes on it. Inside strings write the escape \037
 -- instead, and use math.fmod(a, b) for the modulo operator.
 
+-------------------------------------------------------------------------------
+-- Language
+--
+-- The script is written in English and stays in English inside: names are also
+-- keys, and the game logic never sees a translation. Text is translated where it
+-- reaches the screen (BlzFrameSetText and friends, wrapped below), one piece at a
+-- time: a colour code, a line break or the "  -  " separator ends a piece. A piece
+-- is looked up as it is, then with its numbers as {1}, {2}..., then also with known
+-- names as placeholders ("Win {1} on {2} to open it."), so sentences built with
+-- ".." translate without changing them. English runs none of this.
+--
+-- Translations are in src/lang_<code>.lua, Blizzard's own names come from the
+-- language archive (GetObjectName, through src/lang_names.lua). tools/lang explains
+-- how to add text.
+-------------------------------------------------------------------------------
+Lang = {code = 'enUS', on = false, strings = {}, official = {}, names = {}, cache = {}, cached = 0, missing = {}, fontScale = 1}
+
+-- Written in their own language (Lang.FONT draws them whatever the language is).
+Lang.LIST = {
+    {'enUS', 'English'}, {'frFR', 'Français'}, {'deDE', 'Deutsch'}, {'esES', 'Español'},
+    {'itIT', 'Italiano'}, {'plPL', 'Polski'}, {'ruRU', 'Русский'},
+}
+Lang.FONT = 'Fonts\\NIM_____.ttf'
+
+function Lang.add(strings)
+    for key, value in pairs(strings) do
+        Lang.strings[key] = value
+    end
+end
+
+local function langClean(s)
+    s = s:gsub('|n', ' '):gsub('|[cC]\037x\037x\037x\037x\037x\037x\037x\037x', ''):gsub('|[rR]', '')
+    return (s:gsub('^\037s+', ''):gsub('\037s+$', ''))
+end
+
+local function langLookup(key)
+    local value = Lang.strings[key]
+    if value then
+        return value
+    end
+    local code = Lang.official[key]
+    if code then
+        local name = langClean(GetObjectName(FourCC(code)))
+        if name ~= '' and name ~= code then
+            Lang.strings[key] = name
+            return name
+        end
+    end
+end
+
+local function langFill(template, values)
+    return (template:gsub('{(\037d+)}', function(i)
+        return values[tonumber(i)] or ''
+    end))
+end
+
+-- The piece with the given spans ({from, to, value}) as {1}, {2}...
+local function langKey(s, spans)
+    table.sort(spans, function(a, b)
+        return a[1] < b[1]
+    end)
+    local parts, values, pos = {}, {}, 1
+    for i, span in ipairs(spans) do
+        parts[#parts + 1] = s:sub(pos, span[1] - 1) .. '{' .. i .. '}'
+        values[i] = span[3]
+        pos = span[2] + 1
+    end
+    parts[#parts + 1] = s:sub(pos)
+    return table.concat(parts), values
+end
+
+local function langNumbers(s, spans)
+    for from, text in s:gmatch('()(\037d[\037d,.:]*)') do
+        local number = text:gsub('[,.:]+$', '')
+        local to = from + #number - 1
+        local free = true
+        for _, span in ipairs(spans) do
+            if from <= span[2] and to >= span[1] then
+                free = false
+                break
+            end
+        end
+        if free then
+            spans[#spans + 1] = {from, to, number}
+        end
+    end
+    return spans
+end
+
+local function langNames(s)
+    local spans = {}
+    for _, name in ipairs(Lang.names) do
+        local from = 1
+        while true do
+            local a, b = s:find(name, from, true)
+            if not a then
+                break
+            end
+            from = b + 1
+            local free = not s:sub(a - 1, a - 1):find('\037a') and not s:sub(b + 1, b + 1):find('\037a')
+            for _, span in ipairs(spans) do
+                if a <= span[2] and b >= span[1] then
+                    free = false
+                    break
+                end
+            end
+            if free then
+                spans[#spans + 1] = {a, b, langLookup(name) or name}
+            end
+        end
+    end
+    return spans
+end
+
+local function langPiece(piece)
+    local s = piece:gsub('  +', ' ')
+    local value = langLookup(s)
+    if value then
+        return value
+    end
+    local key, values = langKey(s, langNumbers(s, {}))
+    value = langLookup(key)
+    if value then
+        return langFill(value, values)
+    end
+    local named = langNames(s)
+    if #named > 0 then
+        local nameKey, nameValues = langKey(s, langNumbers(s, named))
+        value = langLookup(nameKey)
+        if value then
+            return langFill(value, nameValues)
+        end
+        key = nameKey
+    end
+    if Lang.debug and not Lang.missing[key] then
+        Lang.missing[key] = true
+        print('LANGMISS ' .. key)
+    end
+    return piece
+end
+
+-- Text to show, in the player's language.
+function Lang.tr(s)
+    if not Lang.on or type(s) ~= 'string' or not s:find('\037a') then
+        return s
+    end
+    local done = Lang.cache[s]
+    if done then
+        return done
+    end
+    local out, start, i, n = {}, 1, 1, #s
+    local function flush(to)
+        if to >= start then
+            local lead, body, trail = s:sub(start, to):match('^(\037s*)(.-)(\037s*)$')
+            out[#out + 1] = lead .. (body:find('\037a') and langPiece(body) or body) .. trail
+        end
+    end
+    while i <= n do
+        local c, len = s:sub(i, i), nil
+        if c == '\n' then
+            len = 1
+        elseif c == '|' then
+            local kind = s:sub(i + 1, i + 1):lower()
+            if kind == 'r' or kind == 'n' then
+                len = 2
+            elseif kind == 'c' and s:find('^\037x\037x\037x\037x\037x\037x\037x\037x', i + 2) then
+                len = 10
+            end
+        elseif c == ' ' and s:sub(i, i + 4) == '  -  ' then
+            len = 5
+        end
+        if len then
+            flush(i - 1)
+            out[#out + 1] = s:sub(i, i + len - 1)
+            i = i + len
+            start = i
+        else
+            i = i + 1
+        end
+    end
+    flush(n)
+    done = table.concat(out)
+    if Lang.cached >= 8192 then
+        Lang.cache, Lang.cached = {}, 0
+    end
+    Lang.cache[s] = done
+    Lang.cached = Lang.cached + 1
+    return done
+end
+
+-- A sentence whose values are not numbers or names ({1}, {2}... in order).
+function Lang.f(template, ...)
+    local values = {...}
+    if Lang.on then
+        template = langLookup(template:gsub('  +', ' ')) or template
+    end
+    for i, value in ipairs(values) do
+        values[i] = tostring(value)
+    end
+    return langFill(template, values)
+end
+
+-- Characters, not bytes.
+function Lang.len(s)
+    return utf8 and utf8.len(s) or #s
+end
+
+-- string.upper leaves anything outside ASCII alone.
+function Lang.upper(s)
+    s = s:upper()
+    if not Lang.on or not utf8 or not utf8.len(s) then
+        return s
+    end
+    local out = {}
+    for _, c in utf8.codes(s) do
+        if (c >= 0xE0 and c <= 0xFE and c ~= 0xF7) or (c >= 0x430 and c <= 0x44F) then
+            c = c - 32
+        elseif c >= 0x450 and c <= 0x45F then
+            c = c - 80
+        elseif c == 0x105 or c == 0x107 or c == 0x119 or c == 0x15B or c == 0x153 then
+            c = c - 1
+        elseif c == 0x142 or c == 0x144 or c == 0x17A or c == 0x17C then
+            c = c - 1
+        end
+        out[#out + 1] = utf8.char(c)
+    end
+    return table.concat(out)
+end
+
+-- "R A R E": a space after each character.
+function Lang.spaced(s)
+    return (s:gsub(utf8 and ('(' .. utf8.charpattern .. ')') or '(.)', '\0371 '))
+end
+
+do
+    local load = rawget(_G, 'EngineLoadScript')
+    local cvar = rawget(_G, 'EngineCvar')
+    if load and cvar then
+        local code = cvar('fs_language')
+        if code == '' then
+            code = cvar('fs_language_default')
+        end
+        if code ~= '' then
+            Lang.code = code
+        end
+        Lang.debug = cvar('survivor_lang_debug') == '1'
+        if Lang.code ~= 'enUS' then
+            load('Scripts/Survivor/lang_names.lua')
+            load('Scripts/Survivor/lang_' .. Lang.code .. '.lua')
+            Lang.on = true
+            -- The Polish and Russian archives' font runs wider than Friz Quadrata.
+            if Lang.code == 'ruRU' or Lang.code == 'plPL' then
+                Lang.fontScale = 0.92
+            end
+        end
+    end
+    local setText, setTag, setName = BlzFrameSetText, SetTextTagText, BlzSetUnitName
+    function BlzFrameSetText(frame, s)
+        return setText(frame, Lang.tr(s))
+    end
+    function SetTextTagText(tag, s, height)
+        return setTag(tag, Lang.tr(s), height)
+    end
+    function BlzSetUnitName(unit, s)
+        return setName(unit, Lang.tr(s))
+    end
+end
+
 do
     ---------------------------------------------------------------------------
     -- Configuration
@@ -1793,10 +2061,10 @@ do
     function UI.textLines(s, w, size)
         local perLine = math.max(1, math.floor(w / (size * 0.62)))
         local lines = 0
-        for para in (U.strip(s) .. '\n'):gmatch('(.-)\n') do
+        for para in (U.strip(Lang.tr(s)) .. '\n'):gmatch('(.-)\n') do
             local n, len = 1, 0
             for word in para:gmatch('\037S+') do
-                local wl = string.len(word)
+                local wl = Lang.len(word)
                 if len > 0 and len + 1 + wl > perLine then
                     n, len = n + 1, wl
                 else
@@ -1833,7 +2101,7 @@ do
     function UI.text(parent, s, x, top, w, h, size, align, valign)
         local frame = BlzCreateFrameByType('TEXT', UI.name(), parent, '', 0)
         UI.place(frame, x, top, w, h)
-        BlzFrameSetFont(frame, CFG.FONT, size or 0.0095, 0)
+        BlzFrameSetFont(frame, CFG.FONT, (size or 0.0095) * Lang.fontScale, 0)
         BlzFrameSetTextAlignment(frame, valign or TEXT_JUSTIFY_MIDDLE, align or TEXT_JUSTIFY_LEFT)
         BlzFrameSetText(frame, s or '')
         return frame
@@ -1900,7 +2168,7 @@ do
     function UI.rule(parent, title, x, top, w, size)
         size = size or 0.0125
         local text = UI.text(parent, U.col(GOLD, title), x, top, w, 0.02, size, TEXT_JUSTIFY_CENTER)
-        local lineW = w / 2 - (string.len(title) * size * 0.38 + 0.01)
+        local lineW = w / 2 - (Lang.len(Lang.tr(title)) * size * 0.38 + 0.01)
         if lineW > 0.01 then
             UI.box(parent, x, top - 0.0102, lineW, 0.0008, 150, 112, 58, 210)
             UI.box(parent, x + w - lineW, top - 0.0102, lineW, 0.0008, 150, 112, 58, 210)
@@ -2371,7 +2639,7 @@ do
             pct = def.flat and v.amount or v.amount * 100, pct2 = v.bonus * 100, pct2b = v.amount * 200,
             rank3 = v.rank * 3, rank6 = v.rank * 6, rank10 = v.rank * 10
         }
-        return (def.desc:gsub('{(\037w+)}', function(key)
+        return (Lang.tr(def.desc):gsub('{(\037w+)}', function(key)
             local value = show[key]
             if value == nil then
                 return '?'
@@ -2391,7 +2659,7 @@ do
     end
 
     function G.describeBlessing(b, x)
-        return (b.desc:gsub('{v}', U.col('ffffff', U.num(G.blessingValue(b, x)))))
+        return (Lang.tr(b.desc):gsub('{v}', U.col('ffffff', U.num(G.blessingValue(b, x)))))
     end
 
     function G.recomputeStats()
@@ -5709,7 +5977,7 @@ do
             return
         end
         local texts = Hud.statText
-        local title = U.col(GOLD, 'Stats') .. U.col(GREY, '   ' .. Keys.label('stats') .. ' to hide')
+        local title = U.col(GOLD, 'Stats') .. U.col(GREY, '   ' .. Lang.f('{1} to hide', Keys.label('stats')))
         if texts.title ~= title then
             texts.title = title
             BlzFrameSetText(Hud.statsTitle, title)
@@ -5975,7 +6243,7 @@ do
             if entry then
                 BlzFrameSetVisible(row.bar, true)
                 BlzFrameSetSize(row.bar, math.max(0.002, Hud.meterW * entry.amount / top), Hud.meterW * 0.0135 / 0.176)
-                BlzFrameSetText(row.name, i .. '. ' .. sourceName(entry.key))
+                BlzFrameSetText(row.name, Lang.f('{1}. {2}', i, Lang.tr(sourceName(entry.key))))
                 BlzFrameSetText(row.value, U.big(entry.amount) .. U.col(GREY, ' (' .. math.floor(entry.amount / total * 100 + 0.5) .. '\037)'))
             else
                 BlzFrameSetVisible(row.bar, false)
@@ -6041,7 +6309,11 @@ do
         for i = 1, 4 do
             Cards.cards[i] = Cards.buildCard(root, i)
         end
-        UI.text(root, U.col(GREY, 'S P E L L S'), 0.13, 0.113, 0.07, 0.024, 0.0078)
+        if Lang.on then
+            UI.text(root, U.col(GREY, Lang.spaced(Lang.upper(Lang.tr('Spells')))), 0.0, 0.113, 0.195, 0.024, 0.0078, TEXT_JUSTIFY_RIGHT)
+        else
+            UI.text(root, U.col(GREY, 'S P E L L S'), 0.13, 0.113, 0.07, 0.024, 0.0078)
+        end
         Cards.slots = {}
         for i = 1, CFG.SPELL_SLOTS do
             Cards.slots[i] = UI.icon(root, TEX.white, 0.2 + (i - 1) * 0.03, 0.112, 0.024)
@@ -6191,7 +6463,7 @@ do
         card.rarityIndex = c.rarity
         local r, g, b = rarity.rgb[1], rarity.rgb[2], rarity.rgb[3]
         UI.tint(card.iconFrame, r, g, b, 255)
-        BlzFrameSetText(card.rarityText, U.col(rarity.hex, (rarity.name:upper():gsub('(.)', '\0371 '))))
+        BlzFrameSetText(card.rarityText, U.col(rarity.hex, Lang.spaced(Lang.upper(Lang.tr(rarity.name)))))
         local icon, name, sub, desc, foot
         if c.type == 'spell' then
             local def = SPELLS[c.key]
@@ -6231,6 +6503,10 @@ do
             desc, foot = 'Restore ' .. U.col('ffffff', '40\037') .. ' of your health.', ''
         end
         BlzFrameSetTexture(card.icon, icon, 0, true)
+        if Lang.on then
+            -- Official names run long in some languages: keep them on the card.
+            BlzFrameSetFont(card.name, CFG.FONT, (Lang.len(Lang.tr(name)) > 20 and 0.0112 or 0.0135) * Lang.fontScale, 0)
+        end
         BlzFrameSetText(card.name, U.col(rarity.hex, name))
         BlzFrameSetText(card.sub, U.col(GREY, sub))
         BlzFrameSetText(card.desc, U.col('d8cfc0', desc))
@@ -6246,7 +6522,7 @@ do
             BlzFrameSetText(Cards.title, U.col(GOLD, 'Cache Opened!'))
             BlzFrameSetText(Cards.subtitle, U.col(GREY, 'A cache of power. Every card in it is rare or better.'))
         else
-            BlzFrameSetText(Cards.pillText, U.col('140f0a', 'L E V E L  ' .. R.level))
+            BlzFrameSetText(Cards.pillText, U.col('140f0a', Lang.on and Lang.spaced(Lang.upper(Lang.f('Level {1}', R.level))) or ('L E V E L  ' .. R.level)))
             BlzFrameSetText(Cards.title, U.col(GOLD, 'Level Up!'))
             BlzFrameSetText(Cards.subtitle, U.col(GREY, 'Choose a card. Its rarity decides how strong it is.'))
         end
@@ -6278,7 +6554,7 @@ do
         local canSkip = Profile.perk('skip') > 0
         UI.showButton(Cards.skip, canSkip)
         UI.setLabel(Cards.skip, 'Skip  ' .. U.col(GOLD, '+' .. (10 + R.level) .. ' gold'))
-        UI.setLabel(Cards.reroll, 'Reroll  ' .. R.rerolls .. U.col(GREY, '  [' .. Keys.label('reroll') .. ']'))
+        UI.setLabel(Cards.reroll, Lang.f('Reroll {1}', R.rerolls) .. U.col(GREY, '  [' .. Keys.label('reroll') .. ']'))
         UI.setEnabled(Cards.reroll, R.rerolls > 0)
     end
 
@@ -6492,7 +6768,7 @@ do
         end)
         local meterLines = {}
         for i = 1, math.min(5, #rows) do
-            meterLines[#meterLines + 1] = i .. '.  ' .. sourceName(rows[i].key) .. U.col(GREY, '   ' .. U.big(rows[i].amount))
+            meterLines[#meterLines + 1] = Lang.f('{1}.  {2}', i, Lang.tr(sourceName(rows[i].key))) .. U.col(GREY, '   ' .. U.big(rows[i].amount))
         end
         BlzFrameSetText(Finale.meter, table.concat(meterLines, '\n'))
         BlzFrameSetVisible(Finale.root, true)
@@ -6584,7 +6860,7 @@ do
     end
 
     function Keys.label(action)
-        return KEY_LABEL[Keys.code(action)] or '?'
+        return Lang.tr(KEY_LABEL[Keys.code(action)] or '?')
     end
 
     -- The four movement keys, as 'W A S D'.
@@ -6890,7 +7166,7 @@ do
         UI.setActive(Options.mouseMode, not wasd)
         UI.setActive(Options.keyMode, wasd)
         BlzFrameSetText(Options.modeHint, U.col(GREY, wasd
-            and ('Hold ' .. Keys.moveLabel() .. ' to walk. Clicks do not move the hero.')
+            and Lang.f('Hold {1} to walk. Clicks do not move the hero.', Keys.moveLabel())
             or (Engine.active() and 'Left or right click the ground to walk there, or hold it: the hero follows the cursor.'
                 or 'Right-click the ground to walk there. The movement keys do nothing.')))
         for _, a in ipairs(ACTIONS) do
@@ -7091,10 +7367,22 @@ do
         end, 'dark', 0.0088)
         -- Portable build: an update the player put off stays one click away.
         if Updater.enabled() then
-            Lobby.updateButton = UI.button(root, LAY.x0 + 0.108, 0.596, 0.11, 0.024, U.col(GREEN, 'Update available'), function()
+            Lobby.updateButton = UI.button(root, LAY.x0 + 0.216, 0.596, 0.1, 0.024, U.col(GREEN, 'Update available'), function()
                 Updater.show()
             end, 'green', 0.0088)
             UI.showButton(Lobby.updateButton, false)
+        end
+        if rawget(_G, 'EngineLanguage') then
+            local current = Lang.code
+            for _, entry in ipairs(Lang.LIST) do
+                if entry[1] == Lang.code then
+                    current = entry[2]
+                end
+            end
+            UI.button(root, LAY.x0 + 0.108, 0.596, 0.1, 0.024, U.col(GOLD, current), function()
+                Lobby.openLanguage()
+            end, 'dark', 0.0088)
+            Lobby.buildLanguage(root)
         end
         Lobby.tabs = {}
         local tabW, tabGap = 0.104, 0.008
@@ -7133,11 +7421,12 @@ do
                 .. '  -  attacks and spells cast themselves  -  tap a card to pick it'))
             return
         end
-        local move = Keys.wasd() and (Keys.moveLabel() .. ' to move')
+        local move = Keys.wasd() and Lang.f('{1} to move', Keys.moveLabel())
             or (Engine.active() and 'Left or right click, or hold it, to move' or 'Right-click to move')
         BlzFrameSetText(Lobby.footer, U.col(GREY, move .. '  -  attacks and spells cast themselves  -  '
-            .. Keys.label('card1') .. ' ' .. Keys.label('card2') .. ' ' .. Keys.label('card3') .. ' picks a card  -  '
-            .. Keys.label('reroll') .. ' rerolls  -  ' .. Keys.label('play') .. ' to play  -  Esc for options'))
+            .. Lang.f('{1} picks a card', Keys.label('card1') .. ' ' .. Keys.label('card2') .. ' ' .. Keys.label('card3'))
+            .. '  -  ' .. Lang.f('{1} rerolls', Keys.label('reroll'))
+            .. '  -  ' .. Lang.f('{1} to play', Keys.label('play')) .. '  -  Esc for options'))
     end
 
     function Lobby.setTab(key)
@@ -7369,10 +7658,10 @@ do
         C.zoneArtEdge = UI.border(page, C.zoneArtX - 0.002, C.zoneArtTop + 0.002, 0.098, 0.051)
         local tx = ix + 0.108
         C.zoneName = UI.text(page, '', tx, ctop - 0.006, ix + iw - 0.009 - tx, 0.022, 0.016)
-        C.zoneTier = UI.text(page, '', tx, ctop - 0.006, ix + iw - 0.009 - tx, 0.022, 0.0068, TEXT_JUSTIFY_RIGHT)
+        C.zoneTier = UI.text(page, '', tx, Lang.on and ctop - 0.028 or ctop - 0.006, ix + iw - 0.009 - tx, 0.022, 0.0068, TEXT_JUSTIFY_RIGHT)
         C.zoneSub = UI.text(page, '', tx, ctop - 0.032, ix + iw - 0.009 - tx, 0.014, 0.0085)
         C.zoneDesc = UI.text(page, '', ix + 0.009, ctop - 0.062, iw - 0.018, 0.044, 0.0074, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
-        C.zoneBosses = UI.text(page, '', ix + 0.009, ctop - 0.108, iw - 0.018, ch - 0.128, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
+        C.zoneBosses = UI.text(page, '', ix + 0.009, Lang.on and ctop - 0.122 or ctop - 0.108, iw - 0.018, ch - 0.128, 0.0072, TEXT_JUSTIFY_LEFT, TEXT_JUSTIFY_TOP)
         C.zoneRecord = UI.text(page, '', ix + 0.009, ctop - ch + 0.017, iw - 0.018, 0.012, 0.0068)
         C.zoneRows = {}
         for rank, zi in ipairs(ZONE_ORDER) do
@@ -7440,6 +7729,53 @@ do
     -- and the keystone level for Mythic+. Done or Escape closes it.
     ---------------------------------------------------------------------------
     local DW = {x = 0.14, top = 0.545, w = 0.52, rowH = 0.06, step = 0.067, rows = 0.094}
+
+    -- The Language window: every language, named in itself, in a font that has all
+    -- of their letters. A language's voices and Blizzard names are in an archive
+    -- mounted at startup, so choosing one restarts the game.
+    function Lobby.buildLanguage(root)
+        local L = {open = false}
+        Lobby.L = L
+        local group = UI.group(root)
+        BlzFrameSetLevel(group, 9)
+        L.group = group
+        UI.box(group, -0.3, 0.6, 1.4, 0.6, 0, 0, 0, 170)
+        BlzFrameSetLevel(UI.hit(group, -0.3, 0.6, 1.4, 0.6), 0)
+        local w, step = 0.24, 0.034
+        local x, top = 0.4 - w / 2, 0.5
+        UI.card(group, x, top, w, 0.118 + #Lang.LIST * step, 'Language')
+        for i, entry in ipairs(Lang.LIST) do
+            local code = entry[1]
+            local name = entry[2]
+            local chosen = code == Lang.code
+            local b = UI.button(group, x + 0.04, top - 0.04 - (i - 1) * step, w - 0.08, 0.03, U.col(chosen and GOLD or 'ffffff', name), function()
+                if chosen then
+                    Lobby.closeLanguage()
+                    return
+                end
+                Profile.save()
+                Updater.restartAfterQuit()
+                EngineLanguage(code)
+            end, chosen and 'red' or 'dark', 0.0105)
+            BlzFrameSetFont(b.label, Lang.FONT, 0.0105, 0)
+        end
+        local bottom = top - 0.04 - #Lang.LIST * step
+        UI.text(group, U.col(GREY, 'The game restarts to change language.'), x + 0.02, bottom, w - 0.04, 0.014, 0.0072, TEXT_JUSTIFY_CENTER)
+        UI.button(group, 0.4 - 0.07, bottom - 0.018, 0.14, 0.03, U.col(GOLD, 'Close'), function()
+            Lobby.closeLanguage()
+        end, 'dark', 0.0105)
+        BlzFrameSetVisible(group, false)
+    end
+
+    function Lobby.openLanguage()
+        Lobby.L.open = true
+        BlzFrameSetVisible(Lobby.L.group, true)
+    end
+
+    function Lobby.closeLanguage()
+        Lobby.L.open = false
+        BlzFrameSetVisible(Lobby.L.group, false)
+    end
 
     function Lobby.buildDifficulty(root)
         local D = {rows = {}, open = false}
@@ -7679,7 +8015,7 @@ do
         UI.place(C.zoneArtEdge[1], C.zoneArtX - 0.002, C.zoneArtTop + 0.002, (thumb and 0.094 or 0.047) + 0.004, 0.051)
         local tierHex = TIER_HEX[zone.tier]
         BlzFrameSetText(C.zoneName, U.col(GOLD, zone.name))
-        BlzFrameSetText(C.zoneTier, U.col(tierHex, TIER_NAME[zone.tier]:upper()))
+        BlzFrameSetText(C.zoneTier, U.col(tierHex, Lang.upper(Lang.tr(TIER_NAME[zone.tier]))))
         BlzFrameSetText(C.zoneSub, U.col(tierHex, zone.subtitle))
         BlzFrameSetText(C.zoneDesc, U.col('d8cfc0', zone.desc))
         local chips = {}
@@ -7712,7 +8048,7 @@ do
                     BlzFrameSetText(row.status, U.col('ff8000', '+' .. zoneKey))
                 elseif zoneCleared > 0 then
                     local d = DIFFICULTIES[math.min(3, zoneCleared)]
-                    BlzFrameSetText(row.status, U.col(d.hex, d.name))
+                    BlzFrameSetText(row.status, U.col(d.hex, Lang.strings['short:' .. d.name] or d.name))
                 else
                     BlzFrameSetText(row.status, '')
                 end
@@ -7735,7 +8071,7 @@ do
         else
             BlzFrameSetText(C.keyHint, '')
         end
-        UI.setLabel(C.enter, U.col(GOLD, 'ENTER ' .. zone.name:upper()))
+        UI.setLabel(C.enter, U.col(GOLD, Lang.upper(Lang.f('Enter {1}', Lang.tr(zone.name)))))
         local sub = zone.subtitle .. '  -  ' .. zone.final.name .. ' awaits at ' .. U.time(CFG.RUN_LENGTH)
         if keystone then
             sub = 'Keystone +' .. diff.level .. '  -  ' .. zone.final.name .. ' awaits at ' .. U.time(CFG.RUN_LENGTH)
@@ -8076,7 +8412,7 @@ do
             UI.setIcon(X.icon, U.icon(b.code, b.icon), not seen)
             BlzFrameSetText(X.name, seen and U.col(GOLD, b.name) or U.col('6e665c', b.name))
             BlzFrameSetText(X.sub, U.col(GREY, 'Blessing' .. rankNote(nil)))
-            BlzFrameSetText(X.body, U.col('d8cfc0', G.describeBlessing(b, b.per) .. ' per rank.'))
+            BlzFrameSetText(X.body, U.col('d8cfc0', Lang.f('{1} per rank.', G.describeBlessing(b, b.per))))
             BlzFrameSetText(X.heroes, U.col(GREY, 'Offered to every hero. Takes no spell slot.'))
         end
     end
@@ -8155,15 +8491,15 @@ do
         local T = Lobby.T
         local talent = TALENTS[i]
         local rank = Profile.talent(talent.key)
-        local lines = {'Each rank: ' .. G.describeBlessing(talent, talent.per)}
+        local lines = {Lang.f('Each rank: {1}', G.describeBlessing(talent, talent.per))}
         if rank > 0 then
-            lines[#lines + 1] = 'Now: ' .. G.describeBlessing(talent, talent.per * rank)
+            lines[#lines + 1] = Lang.f('Now: {1}', G.describeBlessing(talent, talent.per * rank))
         end
         if rank < talent.max then
-            lines[#lines + 1] = 'Next rank: ' .. G.describeBlessing(talent, talent.per * (rank + 1))
+            lines[#lines + 1] = Lang.f('Next rank: {1}', G.describeBlessing(talent, talent.per * (rank + 1)))
                 .. U.col(GREY, '  (') .. U.col(GOLD, U.big(talentCost(rank + 1)) .. ' gold') .. U.col(GREY, ')')
         end
-        lines[#lines + 1] = 'At rank ' .. talent.max .. ': ' .. G.describeBlessing(talent, talent.per * talent.max)
+        lines[#lines + 1] = Lang.f('At rank {1}: {2}', talent.max, G.describeBlessing(talent, talent.per * talent.max))
         -- Under the row, or over it when the row sits low on the page.
         local bottom = top - rowH - 0.004 - T.tip.h
         if bottom < LAY.bottom + 0.01 then
@@ -8465,6 +8801,12 @@ do
     function G.onAction(name)
         -- The difficulty window takes Escape and keeps Space from starting a run behind it.
         local difficultyOpen = Lobby.D and Lobby.D.open and not Options.open
+        if Lobby.L and Lobby.L.open then
+            if name == 'menu' then
+                Lobby.closeLanguage()
+            end
+            return
+        end
         -- The update window takes Escape as Later (not while downloading).
         if Updater.open then
             if name == 'menu' and Updater.state == 'offer' then
@@ -8614,6 +8956,8 @@ do
             elseif page == 'difficulty' and S.screen == 'lobby' then
                 -- +set survivor_menu difficulty opens the difficulty window.
                 Lobby.openDifficulty()
+            elseif page == 'language' and S.screen == 'lobby' and Lobby.L then
+                Lobby.openLanguage()
             end
         end
     end
@@ -8643,9 +8987,9 @@ do
 
     function Engine.loadingScreen(zone, background)
         EngineCvar('wc3_loading_quiet', zone and '0' or '1')
-        EngineCvar('wc3_loading_title', zone and zone.name or '')
-        EngineCvar('wc3_loading_subtitle', zone and zone.subtitle or '')
-        EngineCvar('wc3_loading_text', zone and zone.desc or '')
+        EngineCvar('wc3_loading_title', zone and Lang.tr(zone.name) or '')
+        EngineCvar('wc3_loading_subtitle', zone and Lang.tr(zone.subtitle) or '')
+        EngineCvar('wc3_loading_text', zone and Lang.tr(zone.desc) or '')
         EngineCvar('wc3_loading_background', zone and tostring(background) or '')
     end
 
@@ -8850,6 +9194,15 @@ do
         Updater.state = 'later'
         BlzFrameSetVisible(Updater.W.group, false)
         UI.showButton(Lobby.updateButton, true)
+    end
+
+    -- Tells the launcher to start the game again once it quits (language change).
+    function Updater.restartAfterQuit()
+        if Updater.enabled() then
+            PreloadGenClear()
+            Preload(Updater.token .. ' restart')
+            PreloadGenEnd(UPDATE_DIR .. 'restart.pld')
+        end
     end
 
     function Updater.download()

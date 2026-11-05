@@ -160,7 +160,8 @@ internal static class WarcraftSurvivorsLauncher
             "+set vid_fullscreen 2 +set vid_native 1 " +
             "+set wc3_loading_quiet 1 +set scr_showfps 0 " +
             "+set wc3_lua_script \"Scripts/Survivor/ashenvale_survivor.lua," +
-            "Scripts/Survivor/engine_boot.lua\" ";
+            "Scripts/Survivor/engine_boot.lua\" " +
+            "+set fs_language_default " + SystemLanguage() + " ";
         if (updates)
         {
             // Same folder the engine's preload files use (APPDATA\warcraft-3, common/main.c).
@@ -221,8 +222,27 @@ internal static class WarcraftSurvivorsLauncher
         engineExited = true;
         if (download != null) download.Join();
 
+        // The player changed language: the choice is saved, start the game again.
+        string restart = Path.Combine(channel, "restart.pld");
+        bool restarting = File.Exists(restart) && File.ReadAllText(restart).Contains(token);
+        TryDelete(restart);
+
         foreach (string name in new[] { "info.pld", "request.pld", "progress.pld" })
             TryDelete(Path.Combine(channel, name));
+        if (restarting)
+        {
+            var same = new List<string>();
+            foreach (string a in launcherArgs) same.Add(Quote(a));
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = Path.Combine(root, "WarcraftSurvivors.exe"),
+                Arguments = string.Join(" ", same.ToArray()),
+                WorkingDirectory = root,
+                UseShellExecute = false
+            });
+            TryDeleteDirectory(Path.Combine(root, ".update"));
+            return;
+        }
         if (!ready)
         {
             TryDeleteDirectory(Path.Combine(root, ".update"));
@@ -252,6 +272,21 @@ internal static class WarcraftSurvivorsLauncher
         {
             MessageBox.Show("The update is installed but the game could not restart.\r\n\r\n" + error.Message,
                 Title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // The game's language until the player chooses one in the lobby.
+    private static string SystemLanguage()
+    {
+        switch (System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName)
+        {
+            case "fr": return "frFR";
+            case "de": return "deDE";
+            case "es": return "esES";
+            case "it": return "itIT";
+            case "pl": return "plPL";
+            case "ru": return "ruRU";
+            default: return "enUS";
         }
     }
 

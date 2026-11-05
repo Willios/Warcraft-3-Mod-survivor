@@ -1,0 +1,160 @@
+# Texts the script builds at runtime, as Lang.tr looks them up: a piece ends at a colour
+# code, a line break or "  -  "; numbers and known names become {1}, {2}... in order.
+up to rank {1}
+no rank limit
+For the {1}!
+Win a run with a {1} hero.
+{1} gold
+gold.
+{1} costs {2}
+{1} seconds
+You rise again.
+Mythic +{1}
+has come. Defeat them to win!
+has entered the fight!
+Item level {1}
+Item level {1}+
+(up from {1})
+Loot:
+{1} ({2})
+Already owned
+salvaged for {1} gold
+keep enemies away from it for 10 seconds
+100 gold and healing
+the horde grows stronger every minute
+every {1} s
+rank {1}
+{1} to hide
+Rank {1}
+Rank {1} > {2}
+Rank {1} / {2}
+enemy health x{1}
+{1} in {2}
+next boss in {1}
+{1} arrives in {2}
+defeat {1}
++{1} upgrade
+if {1} falls in {2}
+Defeat {1}!
+Level {1}
+Level {1} {2} / {3}
+{1} dps
+Takes a spell slot
+No spell slot
+Take
+Banish ({1})
+Skip
++{1} gold
+Reroll {1}
+banked)
+Endless mode for
+Keystone +{1} timed!
++{1} - up to +{2} is open
+up to +{1} is open
++{1}
+Keystone +{1} depleted
+not in time
+Achievement:
+{1} is open.
+Hold {1} to walk. Clicks do not move the hero.
+Options
+Touch and hold the ground: your hero follows your finger
+attacks and spells cast themselves
+tap a card to pick it
+{1} to move
+{1} picks a card
+{1} rerolls
+{1} to play
+Esc for options
+Rewards {1}
+Rewards
+Each difficulty opens when you win {1} on the one before it. Enemies hit harder and live longer; loot and gold grow with them.
+Win {1} on {2} to open it.
+No end: kill the final boss in time to open the next keys (up to +{1} now).
+No end: kill the final boss in time to open the next keys (up to +{1} now, best timed +{2}).
+best +{1}
+no key timed
+ilvl {1}
+Time a key to open the next ones: up to +{1}
+Win on {1} to open {2}
+Enter {1}
+{1} awaits at {2}
+Keystone +{1}
+rewards x{1}
+upgrade {1}/{2}
+Next:
+Not looted yet.
+Drops at item level
+on Normal,
+Heroic,
+Mythic, up to
+from a +10 keystone.
+Upgrade +{1} item level
+{1} per rank.
+Each rank: {1}
+Now: {1}
+Next rank: {1}
+At rank {1}: {2}
+Buy
+{1} pts
+of {1} points
+of {1} earned
+empty
+{1} download ({2} files)
+{1} download ({2} file)
+the game restarts when it is done
+Installing v{1}...
+{1} of {2}
+{1}s left
+The game restarts to change language.
+Language
+Gold from every run buys permanent talents for all heroes. You have
+points to spend
+Time
+Level
+Kills
+Bosses
+Damage dealt
+Damage taken
+Spells
+Average item level {1}
+Average item level
+Discovered
+Dropped by
+Looted
+Offered to:
+Total:
+Runs
+Wins
+Wins with this hero
+Talent
+Rerolls
+Reroll {1}
+SPELL POOL
+click one to start with it
+best here
+at item level {1}.
+in {1} at {2}
+{1} earned
+{1} extra life
+{1} extra lives
+{1} opened
+{1} rating
+{1} spent
+{1}, up to
+Defeat {1} in {2}.
+rewards x{1} ilvl {2}
+Buy {1} pts
+Skip +{1} gold
+rank {1} / {2}
+Next >
+< Prev
+Gold
+Rank
+gold
+short:Heroic
+short:Mythic
+{1} {2}
+{1}. {2}
+Restore
+of your health.

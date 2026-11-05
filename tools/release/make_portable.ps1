@@ -48,8 +48,7 @@ Remove-Item (Join-Path $runtime 'share\warcraft-3\Scripts\Survivor\test_*.lua')
 Get-ChildItem -LiteralPath (Join-Path $runtime 'share\warcraft-3') -Filter *.cfg |
     Where-Object Name -ne 'config.cfg' | Remove-Item
 Remove-Item (Join-Path $runtime 'share\warcraft-3\Maps\WarcraftSurvivor.w3m') -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $root 'src\ashenvale_survivor.lua'), (Join-Path $root 'src\engine_boot.lua') `
-    (Join-Path $runtime 'share\warcraft-3\Scripts\Survivor')
+Copy-Item (Join-Path $root 'src\*.lua') (Join-Path $runtime 'share\warcraft-3\Scripts\Survivor')
 
 # Only the Blizzard files the game reads: the four archives trimmed to the web build's
 # reads list (tools/web_trace_reads.txt, plus War3zUpdate*.mpq) and the arena maps.

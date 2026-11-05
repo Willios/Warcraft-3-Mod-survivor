@@ -1,0 +1,749 @@
+2	(up from {1})
+4	+1 banish every run per rank. A banished card never comes back that run.
+5	+1 free reroll every run per rank.
+6	+10\037 experience
+7	+2 armor
+8	+20\037 gold
+9	+5\037 critical strike
+10	+5\037 damage reduction
+11	+6\037 dodge
+12	+6\037 movement speed
+13	+8\037 attack speed
+14	+8\037 damage
+15	+{1}
+16	+{1} - up to +{2} is open
+17	+{1} gold
+18	+{1} upgrade
+19	+{pct}\037 critical strike chance and stronger critical hits.
+20	+{pct}\037 dodge and +{pct}\037 critical strike chance.
+21	+{v} armor
+22	+{v} health per second
+23	+{v} maximum health
+24	+{v} projectile on attacks and bolts
+25	+{v}\037 area of effect
+26	+{v}\037 attack speed
+27	+{v}\037 chance of rarer cards
+28	+{v}\037 critical strike
+29	+{v}\037 critical strike chance
+30	+{v}\037 critical strike damage
+31	+{v}\037 damage
+32	+{v}\037 damage reduction
+33	+{v}\037 experience
+34	+{v}\037 gold
+35	+{v}\037 movement speed
+36	+{v}\037 pickup range
+37	+{v}\037 spell duration
+39	100 gold and healing
+40	< Prev
+41	A cache of power. Every card in it is rare or better.
+42	A crackling shield deals {dmg} damage every 0.5 sec to enemies within {radius}.
+43	A cyclone tears through the densest pack: {waves} hits of {dmg} damage within {radius}.
+44	A new version is out!
+45	A war hawk dives on the {count} nearest enemies for {dmg} damage each.
+46	A wisp fetches experience gems and gold for you. Faster and wider-ranging per rank.
+48	ACHIEVEMENTS
+82	ALL ACHIEVEMENTS
+135	ARMORY
+137	AUDIO
+155	Achievement:
+156	Achievements
+157	Acid, healing spray and a chemical rage. Turns kills into gold.
+158	Alliance
+159	Already owned
+160	Alterac Valley
+161	Ambience
+162	An owl spirit dives on the {count} nearest enemies for {dmg} damage, then on one more.
+163	Annihilator
+164	Another shrine of protection is already awake
+165	Anub'Rekhan
+166	Arcane Barrage
+167	Arcane sparks hit enemies within {radius} for {dmg} damage every second. Spells recharge {pct}\037 faster.
+168	Arcanist Doan
+169	Archer
+170	Archmage Antonidas
+171	Archmage Arugal
+172	Area
+173	Armor
+174	Armory
+175	Arrows of light hit enemies within {radius} for {dmg} damage every second. +{pct}\037 damage.
+176	Artisan
+177	Ascendant
+178	Ashenvale
+179	Assassin
+180	At rank {1}: {2}
+181	Attack speed
+182	Attacks and bolts fire {rank} extra projectile(s).
+183	Attacks and spells heal for {v}\037 of their damage
+184	Attacks deal +{pct} cold damage and slow by 30\037.
+185	Attacks have a {pct}\037 chance to stun for 1 sec and deal extra damage.
+186	Audio
+187	Aura
+188	Auto Attack
+189	Average item level
+190	Average item level {1}
+191	Awakens {count} treants for {dur} sec. Each strikes for {dmg}.
+193	BLESSINGS
+347	Back
+349	Banish ({1})
+350	Banishes {count} nearby enemy into the ether: {dmg} magic damage and slowed by 50\037.
+351	Barak Kodobane
+352	Baron Rivendare
+353	Barrel
+354	Basic attacks splash {pct}\037 of their damage to nearby enemies.
+355	Bats tear through lines and every blow feeds him.
+356	Below half health, devours life around the hero: {heal} health and {dmg} damage within {radius}.
+357	Belt of Giant Strength
+358	Black arrows and drained life. Never stops shooting.
+359	Blasts the nearest enemy and everything within {radius} for {dmg} damage, slowing them by 50\037.
+360	Blessing
+361	Blink Strike
+362	Blinks into the nearest enemy, dealing {dmg} damage within {radius}.
+363	Blood and Thunder
+364	Bloodlord Mandokir
+365	Boss Hunter
+366	Bosses
+367	Bosses are 10\037 more likely to drop gear per rank.
+368	Brawler
+369	Breathes fire, staggers out of harm and splits into elements.
+370	Breathes {count} cone of fire for {dmg} damage that keeps burning for {dot} per second.
+371	Brings a bear, a quilbeast and a stampede to every fight.
+372	Bruiser
+373	Brutality
+374	Buff
+375	Burning blade
+376	Burns enemies within {radius} for {dmg} damage every 0.5 sec.
+377	Burns everything around him and slips through attacks.
+378	Burns {count} enemy for {dmg} damage.
+379	Burst
+380	Buy
+381	Buy {1} pts
+387	CODEX
+388	Cache Opened!
+389	Calls {count} bear for {dur} sec. It mauls for {dmg}.
+390	Calls {count} quilbeast for {dur} sec. It strikes for {dmg}.
+391	Calls {count} spirit wolves for {dur} sec. Each bites for {dmg}.
+392	Calls {count} spirits of vengeance for {dur} sec. Each strikes for {dmg}.
+393	Calls {waves} waves of ice on the densest pack. Each wave deals {dmg} damage within {radius} and slows by 35\037.
+394	Cannibalize
+395	Captain Galvangar
+396	Carried
+397	Champion of Azeroth
+398	Character
+399	Charlga Razorflank
+400	Charms the strongest enemy in reach: it turns on its pack and burns out for {dmg} damage, half of it to those around.
+401	Chemist
+402	Choose a card. Its rarity decides how strong it is.
+403	Claws of Attack
+404	Cleared
+405	Click a key to change it. Esc returns to the menu.
+406	Close
+407	Codex
+408	Collector
+409	Common
+410	Comradeship
+411	Consecration
+412	Critical chance
+413	Critical damage
+414	Crown of Kings
+415	Curator
+417	DEFEAT
+418	DETAILS
+419	DIFFICULTY
+422	Dalaran
+423	Damage
+424	Damage Done
+425	Damage Reduction
+426	Damage dealt
+427	Damage reduction
+428	Damage taken
+429	Death Coil from range, an army of the dead up close.
+430	Deathless
+431	Defeat {1} in {2}.
+432	Defeat {1}!
+433	Demon
+434	Deploys {count} clockwerk goblins for {dur} sec. Each hits for {dmg}.
+436	Discover 100 cards in the codex.
+437	Discover 40 cards in the codex.
+438	Discovered
+439	Dodge
+440	Done
+441	Doomguard Commander
+442	Dooms {count} enemy for {dmg} damage. Prefers bosses and elites.
+443	Douses the nearest pack in brew: {dmg} damage within {radius} and a 55\037 slow.
+444	Down
+445	Download & restart
+446	Download for Windows
+447	Downloading
+448	Drains enemies within {radius} for {dmg} damage every second. Heals for {pct}\037 of all damage dealt.
+449	Drains {count} enemy for {dmg} damage and heals for half of it.
+450	Drains {count} nearby enemies for {dmg} damage, healing for a quarter of it.
+451	Drek'Thar
+452	Dropped by
+453	Drops at item level
+454	Drops {count} infernal on the enemy for {impact} damage within {radius}. It fights for {dur} sec.
+455	Duelist
+456	ENDLESS
+458	Each difficulty opens when you win {1} on the one before it. Enemies hit harder and live longer; loot and gold grow with them.
+459	Each rank: {1}
+460	Earn 5,000 gold in total.
+461	Edwin VanCleef
+462	Enchanted Crows
+463	Endless
+464	Endless Mode
+465	Endless mode
+466	Endless mode for
+467	Engineer
+469	Engulfs the densest pack in flames: {waves} bursts of {dmg} damage within {radius}.
+470	Enter the zone (lobby)
+471	Enter {1}
+472	Epic
+473	Equip
+474	Erupts into a demon for {dmg} damage within {radius}, then has +{pct2}\037 damage, +200 health and ranged attacks for {dur} sec.
+475	Erupts under the densest pack: {waves} waves of {dmg} damage within {radius}.
+476	Esc closes this menu
+477	Esc for options
+478	Esc returns to the menu
+480	Every boss drops an item. Carry any six into your runs: pick an item, then Equip.
+481	Every card in your first hand of each run is Rare or better.
+482	Every gem flies to you!
+483	Every hand deals four cards.
+484	Every hero earns them for the whole account. Spend the points on the Rewards tab.
+485	Every kill heals 1 health
+486	Exterminator
+489	Fans of knives in every direction and spirits of vengeance behind.
+490	Fel fire burns the canopy. Corrupted druids roam the dying woods, and voidwalkers and infernals answer the call of the satyr hellcallers.
+491	Felwood
+492	Ferocity
+493	Fire caster
+494	Fireball
+495	Fires {count} frost bolt for {dmg} damage, slowing by 40\037.
+496	First Blood
+497	For heroes in their best gear.
+498	For the {1}!
+499	Forked lightning and crushing tides, behind a mana shield.
+500	Forks lightning into the {count} nearest enemies for {dmg} damage each.
+501	Fortitude
+502	Fortune
+504	Freezes whole packs in place and lets the storm do the work.
+505	Frenzies for {dur} sec: +{pct2}\037 attack speed and +10\037 movement speed.
+506	Frost Nova and orbiting ice shards. Nothing moves fast near him.
+507	Frost Orbs
+508	Frost caster
+509	Frost chills enemies within {radius} for {dmg} damage every second. Grants {pct} armor; attackers take {rank6} frost damage.
+510	Frost necromancer
+511	Frostwolf Alpha
+512	Fully upgraded
+513	GAME MENU
+515	Gahz'ranka
+516	Giant Slayer
+517	Glaive Toss
+518	Gold
+519	Gold Rush
+520	Gold from every run buys permanent talents for all heroes. You have
+521	Gold pickups on the ground are doubled for the first 3 minutes of each run.
+522	Goretooth
+523	Grand Magister Rommath
+524	Greed
+526	HEROES
+527	Hakkar the Soulflayer
+528	Hammers and thunder. Stuns anything foolish enough to stand close.
+529	Hard to kill and harder to outlast. Heals himself between swings.
+530	Haste
+531	Heal
+532	Heal for {v}\037 of damage dealt
+533	Health
+534	Hellfire Peninsula
+535	Herod the Scarlet Champion
+536	Heroic
+537	Heroic,
+538	Hexes the {count} nearest enemies for {dmg} damage and cripples them (70\037 slow).
+539	High Inquisitor Whitemane
+540	High Priestess Jeklik
+541	High Warlord Naj'entus
+542	Hoarder
+543	Hogger
+544	Hold {1} to walk. Clicks do not move the hero.
+545	Holy ground under the hero deals {dmg} damage every 0.75 sec within {radius}.
+546	Holy guardian
+547	Holy light burns enemies within {radius} for {dmg} damage every second. Grants {pct} armor.
+548	Horde
+549	Houndmaster Loksey
+550	Howls for {dmg} damage within {radius}, slowing enemies by 45\037 for 4 sec.
+551	Hurls {count} coil of death for {dmg} damage. Heals for 15\037 of the damage.
+552	Hurls {count} magic hammer at the nearest enemy for {dmg} damage, stunning for {stun} sec.
+553	INTERFACE
+554	INVENTORY
+555	Ice trolls, Nerubians and the Scourge guard the road to Icecrown. The Lich King is waiting.
+556	Illidan Stormrage
+557	Illidan rules from the Black Temple. Naga rise from the moat, blood elves hold the halls and the Illidari are ready to die for their master.
+558	Illidan's Army
+559	Impales whole lines and hides under a shell of spikes.
+560	In the armory
+561	Infernal Behemoth
+563	Installing v{1}...
+564	Interface
+565	Interface size
+566	Inventory
+567	Inventory full - unequip an item
+568	Invulnerable
+570	Item level {1}
+571	Item level {1}+
+572	Jin'do the Hexxer
+573	Juggernaut
+574	KEYBINDS
+575	Kargath Bladefist
+576	Keen Eye
+577	Keybinds
+578	Keyboard
+580	Keystone +{1}
+581	Keystone +{1} depleted
+582	Keystone +{1} timed!
+583	Keystone Challenger
+584	Keystone Hero
+585	Keystone Initiate
+586	Keystone Master
+587	Keystone depleted
+588	Keystones with no end: every level is harder. Kill the final boss fast to upgrade the key.
+589	Khan Hratha
+590	Kills
+591	Kobolds pour out of the mines, murlocs crawl up from the coast and the Defias Brotherhood marches on the farms with the farmhands it bought.
+592	Kolkar Stormseer
+593	Korrak the Bloodrager
+594	Krik'thir the Gatewatcher
+596	Lady Vashj
+597	Lands in a robot suit for {dmg} damage within {radius}, then has +6 armor and +{pct2}\037 damage for {dur} sec.
+598	Language
+599	Last Guardian
+600	Later
+601	Launches {count} fireball for {dmg} damage that splashes nearby enemies.
+602	Left
+603	Left or right click the ground to walk there, or hold it: the hero follows the cursor.
+604	Left or right click, or hold it, to move
+605	Legendary
+606	Level
+607	Level Up!
+608	Level {1}
+609	Level {1} {2} / {3}
+610	Life steal
+611	Light of the Alliance
+612	Lightning
+613	Lightning leaps from foe to foe while spirit wolves hold the line.
+614	Lightning strikes the nearest enemy for {dmg} damage and jumps to {count} more.
+615	Living flame
+616	Lizards trample the densest pack: {waves} waves of {dmg} damage within {radius}.
+617	Lobs {count} acid bomb for {dmg} damage that splashes and slows.
+618	Locked
+619	Looses {count} bolts of arcane fire at the nearest enemies for {dmg} damage each.
+620	Looses {count} burning arrows at the nearest enemies for {dmg} damage each.
+621	Loot
+622	Loot 10 pieces of gear.
+623	Loot every piece of gear.
+624	Loot it first
+625	Loot:
+626	Looted
+627	Lord Banehollow
+628	Loremaster
+629	Lucky Star
+640	Magnetism
+641	Magtheridon
+642	Main Menu
+643	Mannoroth
+644	Master volume
+645	Max
+646	Max rank
+647	Menu
+648	Might
+649	Mine Cart
+650	Missile
+651	Moon Glaives
+652	Mouse
+653	Move down
+654	Move left
+655	Move right
+656	Move up
+657	Movement
+658	Movement speed
+659	Mr. Smite
+660	Multishot
+661	Music
+662	Mythic
+664	Mythic +{1}
+665	Mythic+
+666	Mythic, up to
+667	Nature caller
+668	Nazan
+669	Nearby enemies within {radius} take {dmg} damage every second. +{pct}\037 movement and attack speed.
+670	New passive
+671	New spell
+672	Next >
+673	Next rank: {1}
+674	Next:
+675	Night Elf
+676	Night has fallen on the forest. Wolves run with the furbolgs, the satyrs of Felwood creep in from the north and the Sentinels shoot at every stranger.
+681	No end: kill the final boss in time to open the next keys (up to +{1} now).
+682	No end: kill the final boss in time to open the next keys (up to +{1} now, best timed +{2}).
+683	No new gear this time.
+684	No spell slot
+685	Normal
+686	Northrend
+687	Not enough gold
+688	Not learned
+689	Not looted yet.
+690	Not offered yet.
+691	Noth the Plaguebringer
+692	Nothing left to learn
+693	Now: {1}
+695	Off
+696	Offered to every hero. Takes no spell slot.
+697	Offered to:
+698	Old Murk-Eye
+699	Old Ursangous
+700	Opening Hand
+701	Opens a rift that hurls {count} arcane bolts at the nearest enemies for {dmg} damage each.
+702	Options
+703	Options menu
+704	Orbit
+705	Overtime
+706	PERKS
+707	Pack leader
+708	Pass on any hand and take gold instead.
+709	Passive
+710	Patchwerk
+711	Perks belong to the account: every hero of every faction has them. Earn achievements for more points.
+712	Persistence
+713	Pick card 1
+714	Pick card 2
+715	Pick card 3
+716	Pick card 4
+717	Pickup range
+718	Pile of Treasure
+719	Plaguelands
+720	Plants {count} serpent ward for {dur} sec. Each spits for {dmg}.
+721	Play 25 runs.
+722	Play Again
+724	Precision
+725	Press a key
+726	Press the new key. Esc cancels.
+727	Prince Kael'thas
+728	Prince Xavius
+729	Projectiles
+730	Protect the shrine
+731	Purse of Gold
+732	Puts enemies within {radius} to sleep for {stun} sec and deals {dmg} damage.
+733	Quit Game
+734	REWARDS
+737	RUN
+738	Rains fire on the battlefield and cleaves what survives.
+739	Rains fire on the densest pack: {waves} waves of {dmg} damage within {radius}.
+740	Raises {count} skeletons for {dur} sec. Each strikes for {dmg}.
+741	Random Hero
+742	Ranger
+743	Rank {1}
+744	Rank {1} / {2}
+745	Rank {1} > {2}
+746	Rare
+747	Rarer cards show up more often per rank.
+748	Raven Form
+749	Razormane Stampede
+750	Reach
+751	Reach 15:00 in endless mode.
+752	Reach 20:00 in endless mode.
+753	Reach 30:00 in endless mode.
+754	Reach a Mythic+ rating of 2,500.
+755	Reach an average equipped item level of 130.
+756	Reach level 30 in a single run.
+757	Refund all talents
+758	Regeneration
+759	Reroll the cards
+760	Reroll {1}
+761	Rerolls
+762	Reset perks
+763	Reset to Defaults
+764	Restart Run
+765	Restarting
+766	Resume
+767	Retry
+768	Return to Camp
+769	Return to life once per run at half health.
+770	Return to life once per run with half health.
+771	Rewards
+772	Rewards {1}
+773	Rhahk'Zor
+774	Right
+775	Right-click the ground to walk there. The movement keys do nothing.
+776	Right-click to move
+777	Ring of Protection
+778	Rise again once per run with half health.
+779	Robe of the Magi
+780	Rockets, a goblin factory and a robot suit when it gets close.
+781	Roots the swarm in place while treants wade in.
+782	Roots the {count} nearest enemies for {stun} sec, dealing {dmg} plus {dot} per second.
+783	Rot hits enemies within {radius} for {dmg} damage every second. +{pct} health per second and +{rank3}\037 movement speed.
+784	Rots the densest pack: {waves} pulses of {dmg} damage within {radius}.
+785	Runs
+792	SPELL POOL
+794	SPELLS
+796	STARTS WITH
+798	Scarlet Commander Mograine
+799	Scholar
+800	Scout
+802	Second Chance
+803	Second Thoughts
+804	Second Wind
+805	Second chance!
+806	Sees the largest pack within {radius} and calls {waves} rounds of {count} lightning strikes on it, {dmg} damage each.
+807	Selected
+808	Sellsword
+809	Sends {count} shockwave through enemies in a line for {dmg} damage.
+810	Sends {count} wave crashing through a line of enemies for {dmg} damage.
+811	Serpent wards and voodoo spirits fight for him. Hard to pin down.
+812	Sets the ground ablaze and keeps a phoenix circling close.
+813	Sets {count} enemy's soul ablaze: {dmg} damage plus {dot} per second for 4 sec.
+814	Shade of Akama
+815	Shadow Lord Xavian
+816	Shadowmeld
+817	Shadumbra Soulstealer
+818	Shakes the densest pack: {waves} tremors of {dmg} damage within {radius}, slowing by 50\037.
+819	Shockwaves split the field. Comes back once when he falls.
+820	Shoots {count} cursed arrow for {dmg} damage plus {dot} per second for 3 sec.
+821	Show or hide the stats
+822	Showers the densest pack with rockets: {waves} volleys of {dmg} damage within {radius}.
+823	Shrine of Chance
+824	Shrine of Protection
+825	Shrine protected
+826	Silences the nearest pack: {dmg} damage within {radius} and a 60\037 slow.
+827	Siphon Life
+828	Sister Hatelash
+829	Skip
+830	Skip +{1} gold
+831	Slain enemies explode for {pct} damage to enemies near them.
+832	Slams the ground for {dmg} damage to enemies within {radius} and slows them by 50\037.
+833	Slay 1,000 enemies.
+834	Slay 10,000 enemies.
+835	Slay 100 bosses.
+836	Slay 25 bosses.
+837	Slay 50,000 enemies.
+838	Slay your first enemy.
+839	Slayer
+840	Smashes the potion for {dmg} damage within {radius}, then has +{pct2}\037 attack speed and +15\037 movement speed for {dur} sec.
+841	Soul Burn, lava spawn and a volcano under the enemy.
+842	Space
+843	Spawns {count} carrion beetles for {dur} sec. Each bites for {dmg}.
+844	Spawns {count} lava spawn for {dur} sec. Each hits for {dmg}.
+845	Spell duration
+846	Spell haste
+847	Spells
+848	Spells recharge {pct}\037 faster and cover {pct}\037 more area.
+849	Spells recharge {v}\037 faster
+850	Spikes erupt in a line for {dmg} damage, stunning for {stun} sec.
+851	Spikes hit enemies within {radius} for {dmg} damage every second. Grants {pct} armor; attackers take {rank10} damage.
+852	Spins for {waves} strikes of {dmg} damage to everything within {radius}.
+853	Spins through the horde. Every swing can turn into a critical strike.
+854	Splits into Storm, Earth and Fire for {dur} sec, then the spirits merge back into the Brewmaster. Each strikes for {dmg}.
+855	Splits into images that slash every enemy within {radius} for {dmg} damage.
+856	Standard of Wealth
+857	Stars fall around the hero: {waves} waves, each striking {count} enemies within {radius} for {dmg} damage.
+858	Starting...
+859	Stats
+860	Stitches
+861	Stomps for {dmg} damage within {radius}, stunning enemies for {stun} sec.
+862	Storm caller
+863	Stranglethorn Vale
+864	Summon
+865	Summons {count} Water Elemental for {dur} sec. It hits for {dmg}.
+866	Supremus
+867	Survivor
+868	Swarm tank
+869	Swiftness
+870	TALENTS
+872	Take
+873	Takes a spell slot
+874	Talent
+875	Talents
+876	Tavern
+877	Tears open the Dark Portal: {count} orc warriors charge through and fight for {dur} sec. Each strikes for {dmg}.
+878	Tension
+879	The Barrens
+880	The Black Temple
+881	The Burning Legion
+882	The Defias Uprising
+883	The Fel Horde
+884	The Fel Horde marches out of Hellfire Citadel. Chaos grunts and wolf riders lead, warlocks call their felhounds and infernals fall from the burning sky.
+885	The Frostwolf Clan
+886	The Frostwolves defend their valley. Wolves and grunts storm through the snow, wind riders strike from the sky and the tauren break whatever is left.
+887	The Frozen Throne
+888	The Gurubashi Empire
+889	The Gurubashi trolls stir in their jungle temples. Headhunters and berserkers lead the charge, jungle stalkers hunt beside them and murlocs crawl up from the coast.
+890	The Last Guardian of Tirisfal: arcane fire, a storm of crows, and the portal that let the Horde in.
+891	The Long Night
+892	The Scarlet Crusade
+893	The Scarlet Crusade purges the glades. Militia and footmen hold the line while priests and sorceresses keep them fighting.
+894	The Scourge Rises
+895	The Violet Citadel
+896	The Violet Construct
+897	The basic attack fires on its own, even while walking. Hover a spell to read it.
+898	The dead walk the fields of Lordaeron. Ghouls lead the charge and abominations shamble behind.
+899	The download failed
+900	The fountain grants a card hand
+901	The fountain keeps your offering
+902	The game restarts to change language.
+903	The magi of Dalaran have closed their city. Rogue wizards, golems and summoned elementals guard the streets, and the blood elves answer only to their prince.
+904	The quilboar of Razorfen ride with Kolkar centaurs, Grimtotem tauren join the raid and harpies circle overhead looking for stragglers.
+905	The shield shocks enemies within {radius} for {dmg} damage every second. Takes {pct}\037 less damage.
+906	The shrine falls silent
+907	The zone as it is.
+908	They are surrounding you!
+909	Thorns
+910	Thorns lash enemies within {radius} for {dmg} damage every second. Attackers take {pct} damage.
+911	Throws knives in every direction for {dmg} damage within {radius}.
+912	Throws {count} glaive for {dmg} damage that bounces to 3 more enemies.
+913	Throws {count} poisoned dagger: {dmg} damage, then {dot} damage per second for 4 sec.
+914	Tide caller
+915	Time
+916	Time a +10 keystone.
+917	Time a +15 keystone.
+918	Time a Mythic+ keystone.
+920	Time a key to open the next ones: up to +{1}
+921	Tirisfal Glades
+922	Total:
+923	Touch and hold the ground: your hero follows your finger
+924	Tougher enemies and better loot.
+925	Toughness
+926	Turns the strongest enemy in reach to gold for {dmg} damage. Kills have a {pct}\037 chance to drop gold; +{pct}\037 gold.
+928	Uncommon
+929	Undead
+930	Unending
+931	Unequip
+932	Unholy knight
+933	Units and enemies
+934	Unknown error
+935	Unleashes {count} swarm of bats through a line of enemies for {dmg} damage.
+936	Up
+937	Update available
+938	Upgrade
+940	Upgrade +{1} item level
+941	Upgrade a piece of gear to the end of its track.
+942	Ursol the Champion
+943	VICTORY
+944	Vampire
+945	Vampirism
+946	Vazruden the Herald
+947	Veteran
+948	Vigor
+949	Vitality
+950	Volleys of searing arrows under a falling sky.
+962	Warlord Zol'Maz
+963	Warmaster Laggrond
+964	Watchkeeper Gargolmar
+965	Wave
+966	Well Geared
+967	Westfall
+968	When hurt or surrounded, a healing wave restores {heal} health and hits enemies within {radius} for {dmg} damage.
+969	When hurt or surrounded, calls down rain: {heal} health and {dmg} damage to enemies within {radius}.
+970	When hurt or surrounded, heals {heal} health and sears enemies within {radius} for {dmg} damage.
+971	When hurt or surrounded, sacrifices dark energy: {heal} health and {dmg} damage within {radius}.
+972	When hurt, sprays a tonic: {heal} health and {dmg} damage to enemies within {radius}.
+973	When surrounded, a backstab deals {dmg} damage within {radius}, then +30\037 movement speed and +{pct}\037 critical chance for {dur} sec.
+974	When surrounded, bursts into a raven for {dur} sec ({dmg} damage within {radius}): flies over enemies, +40\037 movement speed and +{pct2}\037 dodge.
+975	When surrounded, bursts with holy light for {dmg} damage within {radius} and becomes invulnerable for {dur} sec.
+976	When surrounded, curses enemies within {radius} for {dmg} damage and becomes invulnerable for {dur} sec.
+977	When surrounded, grows huge with a shockwave of {dmg} damage within {radius}, then has +{pct2}\037 damage and +5 armor for {dur} sec.
+978	Wide Hand
+979	Win a run on Heroic difficulty.
+980	Win a run on Mythic difficulty.
+981	Win a run with a {1} hero.
+982	Win a run.
+983	Win on {1} to open {2}
+984	Win with 5 different heroes.
+985	Win {1} on {2} to open it.
+986	Wins
+987	Wins with this hero
+988	Wisdom
+989	Wisp Companion
+990	Witch doctor
+991	Wooden Chest
+992	Wooden Chest opened
+993	You rise again.
+994	ZONE
+995	at item level {1}.
+996	attacks and spells cast themselves
+997	banked)
+998	best +{1}
+999	best here
+1000	click one to start with it
+1001	defeat {1}
+1002	empty
+1003	enemy health x{1}
+1004	every {1} s
+1005	from a +10 keystone.
+1006	gold.
+1007	has come. Defeat them to win!
+1008	has entered the fight!
+1009	if {1} falls in {2}
+1010	ilvl {1}
+1011	in {1} at {2}
+1012	keep enemies away from it for 10 seconds
+1013	next boss in {1}
+1014	no key timed
+1015	no rank limit
+1016	not in time
+1017	of {1} earned
+1018	of {1} points
+1019	on Normal,
+1020	points to spend
+1021	rank {1}
+1022	rank {1} / {2}
+1023	rewards x{1}
+1024	rewards x{1} ilvl {2}
+1025	salvaged for {1} gold
+1026	tap a card to pick it
+1027	the game restarts when it is done
+1028	the horde grows stronger every minute
+1029	up to +{1} is open
+1030	up to rank {1}
+1031	upgrade {1}/{2}
+1032	{1} ({2})
+1033	{1} arrives in {2}
+1034	{1} awaits at {2}
+1035	{1} costs {2}
+1036	{1} download ({2} file)
+1037	{1} download ({2} files)
+1038	{1} dps
+1039	{1} earned
+1040	{1} extra life
+1041	{1} extra lives
+1042	{1} gold
+1043	{1} in {2}
+1044	{1} is open.
+1045	{1} of {2}
+1046	{1} opened
+1047	{1} per rank.
+1048	{1} picks a card
+1049	{1} pts
+1050	{1} rating
+1051	{1} rerolls
+1052	{1} seconds
+1053	{1} spent
+1054	{1} to hide
+1055	{1} to move
+1056	{1} to play
+1057	{1}, up to
+1058	{1}s left
+1059	{count} enchanted storm crows circle Medivh, striking enemies they pass for {dmg} damage.
+1060	{count} frost orbs circle the hero, hitting for {dmg} and chilling enemies.
+1061	{count} glaives circle the hero, slicing enemies for {dmg} damage.
+1062	{count} locusts swirl around the hero for {dmg} damage, bringing back 20\037 as health.
+1063	{count} phoenix circles the hero, burning enemies it passes for {dmg} damage.
+1064	{count} spirits orbit the hero, hitting enemies for {dmg} damage.
+1065	{pct}\037 chance to dodge attacks.
+1066	ATTACK
+1067	DAMAGE
+1068	HEALTH
+1069	Rank
+1070	gold
+1071	short:Heroic
+1072	short:Mythic
+1073	{1} {2}
+1074	{1}. {2}
+1075	Restore
+1076	of your health.

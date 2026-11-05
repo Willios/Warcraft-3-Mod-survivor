@@ -3428,3 +3428,4 @@ War3xLocal.mpq	Units\UndeadAbilityStrings.txt
 War3xLocal.mpq	Units\UndeadUnitStrings.txt
 War3xLocal.mpq	Units\UndeadUpgradeStrings.txt
 War3xLocal.mpq	Units\UnitGlobalStrings.txt
+War3xLocal.mpq	Fonts\NIM_____.ttf
