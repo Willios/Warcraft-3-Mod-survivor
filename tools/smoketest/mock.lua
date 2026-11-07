@@ -250,8 +250,16 @@ function BlzSetSpecialEffectPosition(e, x, y, z) assert(type(z) == 'number' and 
 function BlzSetSpecialEffectYaw() end
 function BlzSetSpecialEffectZ() end
 function BlzSetSpecialEffectColor(e, r, g, b) int('BlzSetSpecialEffectColor', r) end
-function AddLightningEx() return handle('lightning', {}) end
-function DestroyLightning() end
+function AddLightningEx(code, check, x1, y1, z1, x2, y2, z2)
+    assert(type(code) == 'string' and #code == 4 and type(check) == 'boolean', 'AddLightningEx')
+    return handle('lightning', {code = code, x1 = x1, y1 = y1, z1 = z1, x2 = x2, y2 = y2, z2 = z2})
+end
+function MoveLightningEx(bolt, check, x1, y1, z1, x2, y2, z2)
+    assert(bolt.__kind == 'lightning' and not bolt.dead and type(check) == 'boolean' and type(z2) == 'number', 'MoveLightningEx')
+    bolt.x1, bolt.y1, bolt.z1, bolt.x2, bolt.y2, bolt.z2 = x1, y1, z1, x2, y2, z2
+    return true
+end
+function DestroyLightning(bolt) assert(bolt.__kind == 'lightning' and not bolt.dead, 'lightning destroyed twice'); bolt.dead = true end
 local textTags = {}
 function CreateTextTag() local t = handle('texttag', {}); textTags[#textTags + 1] = t; return t end
 -- Permanent text tags (price labels) never expire: each must be destroyed.

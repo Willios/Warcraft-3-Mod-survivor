@@ -940,6 +940,7 @@ War3.mpq	ReplaceableTextures\Water\Water44.blp
 War3.mpq	ReplaceableTextures\Weather\Clouds8x8.blp
 War3.mpq	ReplaceableTextures\Weather\CloudSingleFlat.blp
 War3.mpq	ReplaceableTextures\Weather\Lightning.blp
+War3.mpq	ReplaceableTextures\Weather\ManaBurnBeam.blp
 War3.mpq	ReplaceableTextures\Weather\rainTail.blp
 War3.mpq	Sound\Buildings\Death\BuildingDeathLargeHuman.wav
 War3.mpq	Sound\Interface\Hint.wav

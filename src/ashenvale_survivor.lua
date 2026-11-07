@@ -847,7 +847,7 @@ do
 
     -- Night Elf
     spell('mana_burn', {name = 'Mana Burn', code = 'AEmb', icon = 'BTNManaBurn', kind = 'bolt', cd = 1.8, dmg = 40, count = 1,
-        countEvery = 2, range = 800, missile = FX.arcane, speed = 1200, impact = FX.manaBurn,
+        countEvery = 2, range = 800, instant = true, beam = 'MBUR', impact = FX.manaBurn,
         desc = 'Burns {count} enemy for {dmg} damage.'})
     spell('metamorphosis', {name = 'Metamorphosis', code = 'AEme', icon = 'BTNMetamorphosis', kind = 'buff', cd = 35.0,
         dur = 10, per = 0.1, basePct = 0.25, trigger = 'enemies', scale = 1.3, dmg = 70, radius = 300,
@@ -2583,6 +2583,32 @@ do
                 DestroyLightning(bolt)
             end
         end)
+        return bolt
+    end
+
+    -- A beam from the hero to a unit that stays on both while it lasts (Mana Burn: the
+    -- ability's own LightningEffect). A target that dies keeps the beam's last point.
+    function G.beam(code, target, x, y, duration)
+        local bolt = G.lightning(code, R.hx, R.hy, G.groundZ(R.hx, R.hy) + 90, x, y, G.groundZ(x, y) + 50, duration)
+        if bolt then
+            R.beams[#R.beams + 1] = {bolt = bolt, target = target, x = x, y = y}
+        end
+    end
+
+    function G.updateBeams()
+        local list = R.beams
+        for i = #list, 1, -1 do
+            local beam = list[i]
+            if not R.lightnings[beam.bolt] then
+                list[i] = list[#list]
+                list[#list] = nil
+            else
+                if R.enemies[beam.target] then
+                    beam.x, beam.y = GetUnitX(beam.target), GetUnitY(beam.target)
+                end
+                MoveLightningEx(beam.bolt, false, R.hx, R.hy, G.groundZ(R.hx, R.hy) + 90, beam.x, beam.y, G.groundZ(beam.x, beam.y) + 50)
+            end
+        end
     end
 
     function G.floatText(x, y, s, size, r, g, b)
@@ -4618,6 +4644,9 @@ do
         end
         for _, t in ipairs(targets) do
             if def.instant then
+                if def.beam then
+                    G.beam(def.beam, t.u, t.x, t.y, 0.5)
+                end
                 G.boltHit(def, v, t.u, t.x, t.y)
             else
                 G.launch({model = def.missile, x = R.hx, y = R.hy, target = t.u, tx = t.x, ty = t.y,
@@ -5596,6 +5625,7 @@ do
             return
         end
         G.updateMovement(dt)
+        G.updateBeams()
         G.updateHero(dt)
         G.updateProjectiles(dt)
         if R == nil or R.ended then
@@ -5703,7 +5733,7 @@ do
             kills = 0, gold = 0, bosses = 0, damageDone = 0, damageTaken = 0,
             spells = {}, spellByKey = {}, blessings = {}, blessingOrder = {}, buffs = {}, banished = {},
             enemies = {}, enemyCount = 0, elist = {}, ex = {}, ey = {}, en = 0,
-            summons = {}, corpses = {}, pickups = {}, projectiles = {}, lines = {}, fx = {}, lightnings = {}, sched = {},
+            summons = {}, corpses = {}, pickups = {}, projectiles = {}, lines = {}, fx = {}, lightnings = {}, beams = {}, sched = {},
             meter = {}, loot = {}, pendingLevels = 0, pendingChests = 0, hand = nil, handsDealt = 0,
             rerolls = CFG.BASE_REROLLS + Profile.perk('rerolls'), banishes = CFG.BASE_BANISHES + Profile.perk('banish'),
             livesUsed = 0, invulnUntil = 0, invulnerable = false, magnetUntil = 0, tagCount = 0,

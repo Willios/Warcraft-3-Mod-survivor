@@ -805,6 +805,46 @@ for index, hero in ipairs(HEROES) do
 end
 note('all ' .. #HEROES .. ' heroes played with full pools')
 
+-- Mana Burn: the ability's own beam and target art, no missile.
+do
+    for index, hero in ipairs(HEROES) do
+        if hero.id == 'Edem' then S.heroIndex = index end
+    end
+    S.difficulty = 1
+    G.startRun()
+    run = R()
+    local def = SPELLS.mana_burn
+    check(def.beam == 'MBUR' and def.instant and def.missile == nil, 'Mana Burn is a beam, not a missile')
+    check(def.impact:find('ManaBurnTarget', 1, true), 'Mana Burn keeps its target art')
+    local u = G.createEnemy(run.zone.enemies[1], run.hx + 400, run.hy, {})
+    u.life, u.maxHp = 1000000, 1000000   -- it must outlive the hit for the beam to follow it
+    G.refreshEnemyCache()
+    local bolts, launched = {}, 0
+    local add, launch = AddLightningEx, G.launch
+    AddLightningEx = function(...) local b = add(...); bolts[#bolts + 1] = b; return b end
+    G.launch = function(...) launched = launched + 1; return launch(...) end
+    local inst = G.learnSpell('mana_burn')
+    check(upvalue(G.updateSpells, 'CAST').bolt(inst, G.spellValues(def, 1, 1, run.stats)), 'Mana Burn casts')
+    AddLightningEx, G.launch = add, launch
+    check(#bolts >= 1 and bolts[1].code == 'MBUR' and launched == 0, 'one beam per target, nothing launched')
+    run.hx, run.hy = run.hx + 100, run.hy + 50
+    SetUnitPosition(u, GetUnitX(u) + 70, GetUnitY(u))
+    G.updateBeams()
+    check(run.enemies[u] and bolts[1].x1 == run.hx and bolts[1].x2 == GetUnitX(u), 'the beam stays on the hero and the target')
+    local lastX = bolts[1].x2
+    UnitDamageTarget(run.hero, u, 1e9, false, false, nil, nil, nil)
+    SetUnitPosition(u, lastX + 500, GetUnitY(u))
+    G.updateBeams()
+    check(run.enemies[u] == nil and bolts[1].x2 == lastX, 'a dead target keeps the beam at its last point')
+    run.time = run.time + 0.6
+    G.runScheduled()
+    G.updateBeams()
+    check(bolts[1].dead and #run.beams == 0, 'the beam ends by itself')
+    G.endRun(false)
+    MOCK.click('Return to Camp')
+    note('mana burn: beam from the hero to the target')
+end
+
 -- Leftover effects/units check.
 local alive = 0
 for u in pairs(MOCK.units) do alive = alive + 1 end
